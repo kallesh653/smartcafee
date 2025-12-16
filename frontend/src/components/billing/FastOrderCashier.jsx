@@ -516,7 +516,7 @@ const FastOrderCashier = () => {
 
       {/* Customer Orders - Quick Convert to Bill */}
       <Card
-        style={{ marginTop: 12 }}
+        style={{ marginTop: 12, marginBottom: 180 }}
         title="Customer Orders"
         extra={<Button type="link" onClick={fetchPendingOrders}>Refresh</Button>}
       >

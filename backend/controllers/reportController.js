@@ -1,6 +1,7 @@
 const Bill = require('../models/Bill');
 const Purchase = require('../models/Purchase');
 const SubCode = require('../models/SubCode');
+const Product = require('../models/Product');
 const StockLedger = require('../models/StockLedger');
 const Supplier = require('../models/Supplier');
 const moment = require('moment');
@@ -42,11 +43,14 @@ exports.itemwiseSalesReport = async (req, res) => {
     const itemSales = {};
     bills.forEach(bill => {
       bill.items.forEach(item => {
-        const key = item.subCode.toString();
+        // Use product ID if available, otherwise use subCode for backward compatibility
+        const key = (item.product || item.subCode)?.toString();
+        if (!key) return; // Skip items without product/subCode reference
+
         if (!itemSales[key]) {
           itemSales[key] = {
             itemName: item.itemName,
-            subCodeName: item.subCodeName,
+            subCodeName: item.itemName, // Use itemName for both fields
             quantity: 0,
             totalAmount: 0,
             profit: 0
@@ -54,7 +58,7 @@ exports.itemwiseSalesReport = async (req, res) => {
         }
         itemSales[key].quantity += item.quantity;
         itemSales[key].totalAmount += item.itemTotal;
-        itemSales[key].profit += (item.price - item.costPrice) * item.quantity;
+        itemSales[key].profit += (item.price - (item.costPrice || 0)) * item.quantity;
       });
     });
 
@@ -152,24 +156,24 @@ exports.purchaseSummaryReport = async (req, res) => {
 // @access  Private/Admin
 exports.stockReport = async (req, res) => {
   try {
-    const items = await SubCode.find({ isActive: true })
-      .populate('mainCode', 'name')
-      .select('name subCode currentStock unit minStockAlert price costPrice')
+    const items = await Product.find({ isActive: true })
+      .select('name serialNo category currentStock unit minStockAlert price costPrice')
       .sort({ currentStock: 1 });
 
     const report = items.map(item => ({
       itemName: item.name,
-      subCode: item.subCode,
-      mainCode: item.mainCode?.name,
+      subCode: item.serialNo || '-',
+      mainCode: item.category,
       currentStock: item.currentStock,
       unit: item.unit,
       minStockAlert: item.minStockAlert,
       isLowStock: item.currentStock <= item.minStockAlert,
-      value: item.currentStock * item.costPrice
+      value: item.currentStock * (item.costPrice || 0)
     }));
 
     res.json({ success: true, report });
   } catch (error) {
+    console.error('Stock report error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
@@ -194,13 +198,16 @@ exports.profitReport = async (req, res) => {
     bills.forEach(bill => {
       totalRevenue += bill.grandTotal;
       bill.items.forEach(item => {
-        const cost = item.costPrice * item.quantity;
+        const cost = (item.costPrice || 0) * item.quantity;
         const revenue = item.itemTotal;
         const profit = revenue - cost;
 
         totalCost += cost;
 
-        const key = item.subCode.toString();
+        // Use product ID if available, otherwise use subCode for backward compatibility
+        const key = (item.product || item.subCode)?.toString();
+        if (!key) return; // Skip items without product/subCode reference
+
         if (!itemProfits[key]) {
           itemProfits[key] = {
             itemName: item.itemName,
