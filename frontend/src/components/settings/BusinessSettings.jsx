@@ -375,6 +375,122 @@ const BusinessSettings = () => {
         </Row>
       ),
     },
+    {
+      key: 'menu',
+      label: (
+        <Space>
+          <FileTextOutlined />
+          Menu Slider
+        </Space>
+      ),
+      children: (
+        <Row gutter={[16, 16]}>
+          <Col xs={24}>
+            <Alert
+              message="Customer Menu Slider"
+              description="Simple slider configuration for the customer menu. Leave fields empty to hide that content."
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+          </Col>
+          <Col xs={24}>
+            <Form.Item
+              name="shopTagline"
+              label="Shop Tagline"
+              tooltip="Displayed below shop name on menu"
+            >
+              <Input
+                placeholder="Delicious treats just a tap away"
+                size="large"
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24}>
+            <Divider>Slide 1 (Optional)</Divider>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item
+              name={['menuSlides', 0, 'title']}
+              label="Title"
+            >
+              <Input placeholder="Welcome to Smart Cafe" size="large" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item
+              name={['menuSlides', 0, 'subtitle']}
+              label="Subtitle"
+            >
+              <Input placeholder="Order from your seat!" size="large" />
+            </Form.Item>
+          </Col>
+          <Col xs={24}>
+            <Form.Item
+              name={['menuSlides', 0, 'imageUrl']}
+              label="Image URL (Optional)"
+              tooltip="Full URL to an image (https://...)"
+            >
+              <Input placeholder="https://example.com/image.jpg" size="large" />
+            </Form.Item>
+          </Col>
+          <Col xs={24}>
+            <Divider>Slide 2 (Optional)</Divider>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item
+              name={['menuSlides', 1, 'title']}
+              label="Title"
+            >
+              <Input placeholder="Special Offers" size="large" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item
+              name={['menuSlides', 1, 'subtitle']}
+              label="Subtitle"
+            >
+              <Input placeholder="Check out our deals!" size="large" />
+            </Form.Item>
+          </Col>
+          <Col xs={24}>
+            <Form.Item
+              name={['menuSlides', 1, 'imageUrl']}
+              label="Image URL (Optional)"
+            >
+              <Input placeholder="https://example.com/image2.jpg" size="large" />
+            </Form.Item>
+          </Col>
+          <Col xs={24}>
+            <Divider>Slide 3 (Optional)</Divider>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item
+              name={['menuSlides', 2, 'title']}
+              label="Title"
+            >
+              <Input placeholder="Fast Service" size="large" />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item
+              name={['menuSlides', 2, 'subtitle']}
+              label="Subtitle"
+            >
+              <Input placeholder="Quick and easy ordering" size="large" />
+            </Form.Item>
+          </Col>
+          <Col xs={24}>
+            <Form.Item
+              name={['menuSlides', 2, 'imageUrl']}
+              label="Image URL (Optional)"
+            >
+              <Input placeholder="https://example.com/image3.jpg" size="large" />
+            </Form.Item>
+          </Col>
+        </Row>
+      ),
+    },
   ];
 
   return (
