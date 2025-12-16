@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider, App as AntdApp } from 'antd';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { lazy, Suspense } from 'react';
+import { Spin } from 'antd';
 
 // New Smart Cafe Pages
 import Login from './components/auth/Login';
@@ -8,7 +10,7 @@ import AdminDashboard from './components/dashboard/AdminDashboard';
 import UserDashboard from './components/dashboard/UserDashboard';
 import FastOrderCashier from './components/billing/FastOrderCashier';
 import CustomerMenu from './components/customer/CustomerMenu';
-import MenuQRCode from './components/customer/MenuQRCode';
+const MenuQRCode = lazy(() => import('./components/customer/MenuQRCode'));
 import ManageOrders from './components/orders/ManageOrders';
 import ProductManagement from './components/products/ProductManagement';
 import ViewBills from './components/billing/ViewBills';
@@ -62,7 +64,11 @@ function AppRoutes() {
 
       {/* Public Routes - Customer Menu & QR Code */}
       <Route path="/menu" element={<CustomerMenu />} />
-      <Route path="/menu-qr" element={<MenuQRCode />} />
+      <Route path="/menu-qr" element={
+        <Suspense fallback={<div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>}>
+          <MenuQRCode />
+        </Suspense>
+      } />
 
       <Route
         path="/"
