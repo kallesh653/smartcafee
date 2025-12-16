@@ -16,6 +16,9 @@ connectDB();
 
 const app = express();
 
+// Trust proxy - Required when behind Nginx
+app.set('trust proxy', true);
+
 // Security middleware
 app.use(helmet({
   crossOriginResourcePolicy: false,
