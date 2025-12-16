@@ -57,7 +57,6 @@ app.use('/api/settings', require('./routes/settingsRoutes'));
 
 // Legacy routes (for backward compatibility)
 app.use('/api/maincodes', require('./routes/mainCodeRoutes'));
-app.use('/api/subcodes', require('./routes/subCodeRoutes'));
 
 // Health check
 app.get('/api/health', (req, res) => {
