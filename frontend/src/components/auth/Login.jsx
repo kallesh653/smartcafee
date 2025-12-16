@@ -25,7 +25,7 @@ const Login = () => {
         setLoading(false);
         return;
       }
-      if (activeTab === 'user' && result.user.role !== 'user') {
+      if (activeTab === 'user' && result.user.role !== 'cashier' && result.user.role !== 'user') {
         message.error('This account is not a Cashier account. Please login as Admin.');
         setLoading(false);
         return;
