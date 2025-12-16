@@ -26,39 +26,28 @@ const AdminDashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const [todaySummary, lowStock, bills] = await Promise.all([
+      const [todaySummary, products, bills] = await Promise.all([
         api.get('/bills/summary/today'),
-        api.get('/subcodes/alerts/low-stock'),
+        api.get('/products?isActive=true'),
         api.get('/bills?limit=5')
       ]);
 
       setStats(todaySummary.data.summary);
-      let items = lowStock.data.items || [];
-      if (!items || items.length === 0) {
-        try {
-          const alt = await api.get('/subcodes?lowStock=true');
-          items = alt.data.subCodes || [];
-        } catch (e) {}
-      }
-      // Final fallback: derive low-stock from products if still empty
-      if (!items || items.length === 0) {
-        try {
-          const prods = await api.get('/products?isActive=true&limit=200');
-          const low = (prods.data.products || []).filter(p => {
-            if (p.currentStock === undefined || p.currentStock === null) return false;
-            if (p.minStockAlert === undefined || p.minStockAlert === null) return false;
-            return p.currentStock <= p.minStockAlert;
-          }).map(p => ({
-            _id: p._id,
-            name: p.name,
-            subCode: '-',
-            currentStock: p.currentStock,
-            unit: p.unit,
-            minStockAlert: p.minStockAlert
-          }));
-          items = low;
-        } catch (e) {}
-      }
+
+      // Get low stock items from products
+      const items = (products.data.products || []).filter(p => {
+        if (p.currentStock === undefined || p.currentStock === null) return false;
+        if (p.minStockAlert === undefined || p.minStockAlert === null) return false;
+        return p.currentStock <= p.minStockAlert;
+      }).map(p => ({
+        _id: p._id,
+        name: p.name,
+        subCode: p.serialNo || '-',
+        currentStock: p.currentStock,
+        unit: p.unit,
+        minStockAlert: p.minStockAlert
+      }));
+
       setLowStockItems(items);
       setRecentBills(bills.data.bills || []);
     } catch (error) {

@@ -84,11 +84,14 @@ const FastOrderCashier = () => {
     }
   };
 
-  // Filter by search number and category
+  // Filter by search number/name and category
   const filteredProducts = products.filter(p => {
-    // Search by serial number - EXACT MATCH ONLY
+    // Search by serial number (exact match) or product name (partial match)
     if (searchNumber) {
-      return p.serialNo && p.serialNo.toString() === searchNumber;
+      const searchLower = searchNumber.toLowerCase();
+      const serialMatch = p.serialNo && p.serialNo.toString() === searchNumber;
+      const nameMatch = p.name && p.name.toLowerCase().includes(searchLower);
+      return serialMatch || nameMatch;
     }
     // Filter by category
     if (selectedCategory !== 'All') {

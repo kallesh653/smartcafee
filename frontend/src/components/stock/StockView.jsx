@@ -58,17 +58,17 @@ const StockView = () => {
   const fetchStockData = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get('/subcodes');
-      const stockItems = data.subCodes || [];
+      const { data } = await api.get('/products');
+      const stockItems = data.products || [];
 
       // Calculate statistics
       const totalItems = stockItems.length;
       const lowStockItems = stockItems.filter(item =>
-        item.currentStock <= item.minStockLevel
+        item.currentStock <= (item.minStockAlert || 0)
       ).length;
       const outOfStock = stockItems.filter(item => item.currentStock === 0).length;
       const totalStockValue = stockItems.reduce((sum, item) =>
-        sum + (item.currentStock * (item.purchasePrice || 0)), 0
+        sum + (item.currentStock * (item.costPrice || 0)), 0
       );
 
       setStats({
@@ -115,7 +115,7 @@ const StockView = () => {
         ? values.quantity
         : -values.quantity;
 
-      await api.put(`/subcodes/${selectedItem._id}/stock`, {
+      await api.put(`/products/${selectedItem._id}/stock`, {
         quantity: adjustmentQty,
         remarks: values.remarks || 'Stock adjustment'
       });
@@ -134,10 +134,10 @@ const StockView = () => {
     if (item.currentStock === 0) {
       return { color: 'red', text: 'Out of Stock', icon: '🚫' };
     }
-    if (item.currentStock <= item.minStockLevel) {
+    if (item.currentStock <= (item.minStockAlert || 0)) {
       return { color: 'orange', text: 'Low Stock', icon: '⚠️' };
     }
-    if (item.currentStock > item.maxStockLevel) {
+    if (item.currentStock > (item.maxStockLevel || 999999)) {
       return { color: 'blue', text: 'Overstock', icon: '📦' };
     }
     return { color: 'green', text: 'In Stock', icon: '✓' };
