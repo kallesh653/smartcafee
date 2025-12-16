@@ -1,0 +1,697 @@
+================================================================================
+        SMART CAFE - COMPLETE VPS DEPLOYMENT GUIDE
+        DETAILED STEP-BY-STEP INSTRUCTIONS FOR PRODUCTION DEPLOYMENT
+================================================================================
+
+VERSION: 2.0.0
+LAST UPDATED: December 2024
+SERVER: Ubuntu 22.04 LTS or Higher
+PURPOSE: Cinema Theater Billing System - High Traffic Production Environment
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+1. INTRODUCTION AND PREREQUISITES
+2. SERVER INITIAL SETUP
+3. INSTALLING REQUIRED SOFTWARE
+4. CLONING AND CONFIGURING APPLICATION
+5. DATABASE SETUP AND OPTIMIZATION
+6. NGINX CONFIGURATION (BASIC + ADVANCED)
+7. SSL/HTTPS SETUP WITH AUTO-RENEWAL
+8. PM2 PROCESS MANAGER SETUP
+9. FIREWALL AND SECURITY
+10. TESTING AND VERIFICATION
+11. POST-DEPLOYMENT CHECKLIST
+
+================================================================================
+SECTION 1: INTRODUCTION AND PREREQUISITES
+================================================================================
+
+WHAT THIS GUIDE DOES:
+-------------------
+This guide will help you deploy Smart Cafe application on a Virtual Private
+Server (VPS) like DigitalOcean, AWS EC2, Linode, or any Ubuntu-based VPS.
+
+The application is designed for CINEMA THEATERS where multiple customers
+come during show times (rush hours). It needs to handle:
+- 50-100 concurrent users during peak times
+- Fast billing operations (order in 2-3 seconds)
+- Real-time stock updates
+- Multiple payment modes
+- Mobile and desktop access
+
+SYSTEM REQUIREMENTS:
+-------------------
+Minimum:
+  - CPU: 2 cores
+  - RAM: 4GB (minimum 2GB)
+  - Storage: 25GB SSD
+  - OS: Ubuntu 22.04 LTS or higher
+  - Network: Stable internet connection
+
+Recommended for Cinema (100+ concurrent users):
+  - CPU: 4 cores
+  - RAM: 8GB
+  - Storage: 50GB SSD
+  - OS: Ubuntu 22.04 LTS
+  - Network: 100 Mbps+ connection
+
+WHAT YOU NEED BEFORE STARTING:
+-----------------------------
+1. VPS Server Access:
+   - Root or sudo user access
+   - SSH access (IP address, username, password/key)
+   - Example: ssh root@your-server-ip
+
+2. Domain Names (Optional but Recommended):
+   - Frontend domain: smartcafe.yourdomain.com
+   - Backend API domain: smartcafeapi.yourdomain.com
+   - DNS configured to point to your server IP
+
+3. Code Repository:
+   - GitHub repository access
+   - Your repository URL: https://github.com/kallesh653/smartcafee.git
+
+4. Email Address:
+   - For SSL certificate registration
+   - For server notifications
+
+PORTS YOU WILL USE:
+------------------
+- 80: HTTP (Nginx)
+- 443: HTTPS (Nginx with SSL)
+- 5003: Backend application (internal, proxied by Nginx)
+- 27017: MongoDB (internal only, not exposed)
+- 22: SSH (for server access)
+
+IMPORTANT NOTES:
+---------------
+⚠️ ALWAYS backup your data before making changes
+⚠️ Test in development environment first if possible
+⚠️ Keep your passwords secure and change default passwords
+⚠️ Document any custom changes you make
+⚠️ Regular backups are CRITICAL for production
+
+================================================================================
+SECTION 2: SERVER INITIAL SETUP
+================================================================================
+
+STEP 2.1: CONNECT TO YOUR SERVER
+--------------------------------
+What this does: Establish SSH connection to your VPS server
+
+Command:
+  ssh root@your-server-ip
+
+Example:
+  ssh root@72.61.238.39
+
+What happens:
+  - You'll be prompted for password (if using password authentication)
+  - OR your SSH key will be used (if configured)
+  - You'll see command prompt like: root@servername:~#
+
+TROUBLESHOOTING:
+  If connection fails:
+    - Check internet connection
+    - Verify server IP address is correct
+    - Ensure server is running
+    - Check if port 22 is open
+    - Try: ssh -v root@your-server-ip (verbose mode for debugging)
+
+
+STEP 2.2: UPDATE SYSTEM PACKAGES
+--------------------------------
+What this does: Updates all system packages to latest secure versions
+Why: Security patches, bug fixes, compatibility
+
+Command:
+  apt update && apt upgrade -y
+
+Explanation:
+  - apt update: Downloads package information from all configured sources
+  - &&: Runs next command only if previous succeeds
+  - apt upgrade: Installs available upgrades of all packages
+  - -y: Automatically answer "yes" to prompts
+
+Expected output:
+  Reading package lists... Done
+  Building dependency tree... Done
+  ...packages will be installed/upgraded...
+
+Time taken: 2-10 minutes depending on updates available
+
+
+STEP 2.3: CHECK EXISTING PORTS (VERY IMPORTANT!)
+-----------------------------------------------
+What this does: Identifies which ports are already in use
+Why: To avoid port conflicts with existing applications
+
+Command to check all active ports:
+  netstat -tlnp | grep LISTEN
+
+Explanation:
+  - netstat: Network statistics tool
+  - -t: Show TCP ports
+  - -l: Show listening ports
+  - -n: Show numerical addresses (don't resolve names)
+  - -p: Show process/program name
+  - grep LISTEN: Filter only listening ports
+
+Expected output example:
+  tcp        0      0 0.0.0.0:5000            0.0.0.0:*               LISTEN      1234/node
+  tcp        0      0 0.0.0.0:5001            0.0.0.0:*               LISTEN      5678/node
+  tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      910/sshd
+
+This shows:
+  - Port 5000 is used by a Node.js application (PID 1234)
+  - Port 5001 is used by another Node.js application (PID 5678)
+  - Port 22 is used by SSH (PID 910)
+
+Based on this, you should choose a different port for Smart Cafe.
+In this guide, we use port 5003 (as 5000, 5001, 5002, 5005 are in use).
+
+
+STEP 2.4: CREATE NON-ROOT USER (OPTIONAL BUT RECOMMENDED)
+-------------------------------------------------------
+What this does: Creates a separate user for better security
+Why: Running applications as root is dangerous
+
+Commands:
+  adduser smartcafe
+  usermod -aG sudo smartcafe
+  su - smartcafe
+
+Explanation:
+  - adduser: Creates new user account
+  - usermod -aG sudo: Adds user to sudo group (admin privileges)
+  - su - smartcafe: Switch to the new user
+
+Note: For this guide, we use root user. In production, consider using
+      non-root user for better security.
+
+================================================================================
+SECTION 3: INSTALLING REQUIRED SOFTWARE
+================================================================================
+
+STEP 3.1: INSTALL NODE.JS 18.x
+-----------------------------
+What this does: Installs Node.js runtime for backend application
+Why: Backend is built with Node.js/Express
+
+Commands:
+  curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+  apt-get install -y nodejs
+
+Explanation:
+  Line 1:
+    - curl: Downloads content from URL
+    - -fsSL: Flags for silent, fail on error, follow redirects, show errors
+    - https://deb.nodesource.com/setup_18.x: Official Node.js repository setup
+    - | bash -: Pipes downloaded script to bash for execution
+
+  Line 2:
+    - apt-get install: Package installation command
+    - -y: Auto-confirm installation
+    - nodejs: Package name
+
+Verify installation:
+  node --version
+  Expected: v18.x.x (like v18.19.0)
+
+  npm --version
+  Expected: 9.x.x or higher
+
+TROUBLESHOOTING:
+  If node command not found:
+    - Check if installation succeeded: which node
+    - Try: export PATH=$PATH:/usr/bin
+    - Restart terminal: exit and reconnect
+
+
+STEP 3.2: INSTALL MONGODB 7.0
+----------------------------
+What this does: Installs MongoDB database server
+Why: Application uses MongoDB for data storage
+
+Commands:
+  # Step 1: Import MongoDB GPG key (for package verification)
+  curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | \
+    gpg --dearmor -o /usr/share/keyrings/mongodb-archive-keyring.gpg
+
+  # Step 2: Add MongoDB repository to sources list
+  echo "deb [ signed-by=/usr/share/keyrings/mongodb-archive-keyring.gpg ] \
+    https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | \
+    tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+
+  # Step 3: Update package list
+  apt-get update
+
+  # Step 4: Install MongoDB
+  apt-get install -y mongodb-org
+
+Explanation:
+  Step 1: GPG Key
+    - gpg: GNU Privacy Guard (encryption tool)
+    - --dearmor: Converts ASCII-armored key to binary
+    - Purpose: Verifies package authenticity
+
+  Step 2: Repository Addition
+    - tee: Writes to file and stdout simultaneously
+    - jammy: Ubuntu 22.04 codename
+    - Purpose: Tells apt where to download MongoDB
+
+  Step 3: Update
+    - Refreshes package list with new MongoDB repository
+
+  Step 4: Install
+    - mongodb-org: Complete MongoDB package
+
+
+STEP 3.3: START AND ENABLE MONGODB
+----------------------------------
+What this does: Starts MongoDB and sets it to auto-start on boot
+
+Commands:
+  systemctl start mongod
+  systemctl enable mongod
+  systemctl status mongod
+
+Explanation:
+  - systemctl: System control command (manages services)
+  - start: Starts the service now
+  - enable: Sets service to start automatically on boot
+  - status: Shows current status
+
+Expected output from status:
+  ● mongod.service - MongoDB Database Server
+     Loaded: loaded (/lib/systemd/system/mongod.service; enabled)
+     Active: active (running) since [date/time]
+
+"Active: active (running)" = SUCCESS ✓
+
+Verify MongoDB is listening:
+  netstat -tlnp | grep 27017
+
+Expected:
+  tcp        0      0 127.0.0.1:27017         0.0.0.0:*               LISTEN
+
+This shows MongoDB is listening on localhost port 27017 (correct!)
+
+
+STEP 3.4: INSTALL PM2 (PROCESS MANAGER)
+--------------------------------------
+What this does: Installs PM2 to manage Node.js application
+Why:
+  - Keeps app running 24/7
+  - Auto-restarts on crashes
+  - Manages multiple instances (cluster mode)
+  - Monitors memory usage
+  - Handles log rotation
+
+Command:
+  npm install -g pm2
+
+Explanation:
+  - npm install: Install Node.js package
+  - -g: Global installation (available system-wide)
+  - pm2: Package name
+
+Verify installation:
+  pm2 --version
+  Expected: 5.x.x or higher
+
+PM2 Advantages for Cinema Theater:
+  1. Cluster Mode: Runs multiple app instances for load balancing
+  2. Zero Downtime: Updates app without stopping service
+  3. Auto Restart: Recovers from crashes automatically
+  4. Memory Management: Restarts if memory exceeds limit
+  5. Log Management: Organized logs for debugging
+
+
+STEP 3.5: INSTALL NGINX WEB SERVER
+---------------------------------
+What this does: Installs Nginx reverse proxy and web server
+Why:
+  - Serves frontend static files
+  - Proxies requests to backend API
+  - Handles SSL/HTTPS
+  - Load balancing
+  - Caching for better performance
+  - Security features
+
+Commands:
+  apt install -y nginx
+  systemctl start nginx
+  systemctl enable nginx
+
+Explanation:
+  Similar to MongoDB, starts and enables Nginx
+
+Verify Nginx is running:
+  systemctl status nginx
+
+Expected:
+  Active: active (running)
+
+Test Nginx:
+  curl http://localhost
+
+Expected:
+  You should see HTML output (Nginx default page)
+
+
+STEP 3.6: INSTALL GIT
+--------------------
+What this does: Installs Git version control
+Why: To clone your application code from GitHub
+
+Command:
+  apt install -y git
+
+Verify:
+  git --version
+  Expected: git version 2.x.x
+
+Git will be used to:
+  - Clone repository
+  - Pull updates
+  - Manage code versions
+
+================================================================================
+SECTION 4: CLONING AND CONFIGURING APPLICATION
+================================================================================
+
+STEP 4.1: CLONE REPOSITORY
+-------------------------
+What this does: Downloads your application code from GitHub
+
+Commands:
+  cd /root
+  git clone https://github.com/kallesh653/smartcafee.git
+  cd smartcafee
+
+Explanation:
+  - cd /root: Change to root home directory
+  - git clone: Downloads repository
+  - cd smartcafee: Enter project directory
+
+Expected output:
+  Cloning into 'smartcafee'...
+  remote: Enumerating objects: 1000+, done.
+  remote: Counting objects: 100%, done.
+  ...
+  Receiving objects: 100%, done.
+
+What gets downloaded:
+  /root/smartcafee/
+    ├── backend/          (Node.js API server)
+    ├── frontend/         (React application)
+    ├── README.md         (Documentation)
+    └── package.json      (Project info)
+
+TROUBLESHOOTING:
+  If clone fails:
+    - Check internet connection
+    - Verify repository URL
+    - Ensure Git is installed
+    - Check GitHub is accessible: ping github.com
+
+
+STEP 4.2: SETUP BACKEND
+----------------------
+What this does: Installs backend dependencies and configures settings
+
+Commands:
+  cd backend
+  npm install --production
+
+Explanation:
+  - cd backend: Enter backend directory
+  - npm install: Installs all required Node.js packages
+  - --production: Skips development dependencies (smaller, faster)
+
+What happens:
+  - Reads package.json
+  - Downloads 200+ packages
+  - Creates node_modules/ folder
+  - Takes 2-5 minutes
+
+Expected output (at end):
+  added 289 packages in 2m
+
+packages include:
+  - express: Web framework
+  - mongoose: MongoDB driver
+  - bcryptjs: Password hashing
+  - jsonwebtoken: Authentication
+  - cors: Cross-origin requests
+  - And many more...
+
+
+STEP 4.3: CREATE BACKEND ENVIRONMENT FILE
+-----------------------------------------
+What this does: Creates configuration file with sensitive settings
+Why: Separates config from code, keeps secrets secure
+
+Command:
+  nano .env
+
+Or create file with:
+  cat > .env << 'EOF'
+NODE_ENV=production
+PORT=5003
+
+# MongoDB Connection
+MONGODB_URI=mongodb://localhost:27017/smartcafe_cinema
+
+# JWT Secret (CHANGE THIS!)
+JWT_SECRET=your_super_long_random_secret_key_here_change_this_in_production_2024
+
+# JWT Expiry
+JWT_EXPIRE=30d
+
+# Business Information
+SHOP_NAME=Smart Cafe - Cinema Theater
+SHOP_ADDRESS=Your Cinema Address Here
+SHOP_MOBILE=+91 1234567890
+SHOP_EMAIL=contact@smartcafe.com
+
+# File Upload
+UPLOAD_PATH=uploads/products
+MAX_FILE_SIZE=5242880
+EOF
+
+DETAILED EXPLANATION OF EACH SETTING:
+
+NODE_ENV=production
+  - Purpose: Tells app it's in production mode
+  - Effect: Disables debug logs, enables optimizations
+  - Options: development, production, test
+
+PORT=5003
+  - Purpose: Port number for backend server
+  - Why 5003: Ports 5000-5002, 5005 already in use
+  - Range: 1024-65535 (avoid system ports 1-1023)
+
+MONGODB_URI=mongodb://localhost:27017/smartcafe_cinema
+  - mongodb://: Protocol
+  - localhost: MongoDB server address (same machine)
+  - 27017: MongoDB default port
+  - smartcafe_cinema: Database name
+  - You can change database name to anything
+
+JWT_SECRET=your_super_long_random_secret_key...
+  ⚠️ CRITICAL: This MUST be changed!
+  - Purpose: Encrypts user login tokens
+  - Security: Longer = more secure (minimum 32 characters)
+  - Generate secure secret:
+      openssl rand -base64 48
+      Or: node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+
+JWT_EXPIRE=30d
+  - Purpose: How long login tokens remain valid
+  - Format: 1d, 7d, 30d, 1h, 30m
+  - Recommendation: 7d to 30d for cinema (convenience vs security)
+
+SHOP_NAME, SHOP_ADDRESS, SHOP_MOBILE, SHOP_EMAIL
+  - Purpose: Your business information
+  - Used in: Bills, receipts, reports
+  - Change to your actual cinema details
+
+UPLOAD_PATH=uploads/products
+  - Purpose: Where product images are stored
+  - Relative to backend directory
+  - Don't change unless you modify code
+
+MAX_FILE_SIZE=5242880
+  - Purpose: Maximum upload file size in bytes
+  - 5242880 = 5MB
+  - Increase if you need larger images
+  - Calculate: MB * 1024 * 1024
+
+SAVE THE FILE:
+  - Ctrl + O (write out)
+  - Enter (confirm)
+  - Ctrl + X (exit)
+
+
+STEP 4.4: TEST BACKEND MANUALLY (OPTIONAL BUT RECOMMENDED)
+---------------------------------------------------------
+What this does: Verifies backend works before PM2 setup
+
+Command:
+  node server.js
+
+Expected output:
+  ╔═══════════════════════════════════════════════════════╗
+  ║                                                       ║
+  ║   ☕ Smart Cafe - Cinema Theater API v2.0            ║
+  ║                                                       ║
+  ║   Server running in production mode                   ║
+  ║   Port: 5003                                          ║
+  ║   URL: http://localhost:5003                          ║
+  ║   Database: smartcafe_cinema                          ║
+  ║                                                       ║
+  ╚═══════════════════════════════════════════════════════╝
+
+  ✅ MongoDB Connected: localhost
+  📊 Database: smartcafe_cinema
+
+This means: ✓ Backend is working!
+
+Stop the test server:
+  Press Ctrl + C
+
+TROUBLESHOOTING:
+  Error: "Cannot find module 'xyz'"
+    Solution: Run npm install again
+
+  Error: "EADDRINUSE port 5003 already in use"
+    Solution: Change PORT in .env or kill process using port:
+      lsof -ti:5003 | xargs kill -9
+
+  Error: "MongoError: connect ECONNREFUSED"
+    Solution: Ensure MongoDB is running:
+      systemctl start mongod
+
+
+STEP 4.5: SEED READY ITEMS (OPTIONAL)
+------------------------------------
+What this does: Adds pre-configured items (water bottles, snacks, etc.)
+Why: Quick start with common cinema items
+
+Command:
+  node seedReadyItems.js
+
+Expected output:
+  ✓ Connected to MongoDB
+  ✓ Ready items seeded successfully
+  ✓ 15 items created
+
+What gets added:
+  - Water Bottles (500ml, 1L, 2L)
+  - Snacks (Popcorn, Chips, Chocolates)
+  - Beverages (Soft drinks, Juice)
+  - Supplies (Tissues, etc.)
+
+You can skip this and add items manually later.
+
+================================================================================
+SECTION 5: SETUP FRONTEND
+================================================================================
+
+STEP 5.1: INSTALL FRONTEND DEPENDENCIES
+--------------------------------------
+What this does: Installs React and all frontend packages
+
+Commands:
+  cd ../frontend
+  npm install
+
+Explanation:
+  - cd ../frontend: Go to frontend directory
+  - npm install: Install all dependencies
+
+What happens:
+  - Reads package.json
+  - Downloads React, Ant Design, Axios, etc.
+  - Creates node_modules/
+  - Takes 3-7 minutes
+
+Expected output:
+  added 1500+ packages in 5m
+
+
+STEP 5.2: CREATE FRONTEND ENVIRONMENT FILE
+-----------------------------------------
+What this does: Configures API endpoint for production
+
+Command:
+  cat > .env.production << 'EOF'
+VITE_API_URL=https://smartcafeapi.gentime.in
+EOF
+
+Explanation:
+  VITE_API_URL: Your backend API domain with HTTPS
+  - Change smartcafeapi.gentime.in to YOUR domain
+  - If no domain, use: http://YOUR-SERVER-IP:5003
+  - Must include https:// or http://
+
+⚠️ IMPORTANT: Frontend needs to know where backend is!
+
+
+STEP 5.3: BUILD FRONTEND FOR PRODUCTION
+--------------------------------------
+What this does: Compiles React code to optimized static files
+Why: Production build is 10x smaller and faster
+
+Command:
+  npm run build
+
+Explanation:
+  - Compiles all JSX/JS files
+  - Minifies code (removes whitespace, shortens names)
+  - Optimizes images
+  - Creates dist/ folder with production files
+  - Takes 20-40 seconds
+
+Expected output:
+  vite v5.4.21 building for production...
+  transforming...
+  ✓ 4245 modules transformed.
+  rendering chunks...
+  computing gzip size...
+  dist/index.html                    0.47 kB │ gzip:   0.31 kB
+  dist/assets/index-xxx.css         20.82 kB │ gzip:   4.81 kB
+  dist/assets/index-xxx.js       2,753.60 kB │ gzip: 843.61 kB
+  ✓ built in 25.5s
+
+What this creates:
+  /root/smartcafee/frontend/dist/
+    ├── index.html          (Main HTML file)
+    ├── assets/
+    │   ├── index-xxx.css   (Styles)
+    │   ├── index-xxx.js    (JavaScript)
+    │   └── images/         (Images)
+
+These files will be served by Nginx.
+
+Build size explanation:
+  - Original code: ~50MB
+  - Built code: ~3MB
+  - Gzipped: ~800KB (what users download)
+
+TROUBLESHOOTING:
+  If build fails:
+    - Check for JavaScript errors in output
+    - Ensure all dependencies installed: rm -rf node_modules && npm install
+    - Check Node.js version: node -v (should be 16+)
+
+This completes Part 1 of the deployment guide.
+Continue reading 02-NGINX-ADVANCED-CONFIGURATION.txt for Nginx setup.
+
+================================================================================
+END OF PART 1
+================================================================================

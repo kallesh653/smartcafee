@@ -1,0 +1,612 @@
+================================================================================
+        MONGODB BACKUP, RESTORE, AND DATA MANAGEMENT GUIDE
+        COMPLETE DATABASE OPERATIONS FOR SMART CAFE
+================================================================================
+
+VERSION: 2.0.0
+PURPOSE: Learn MongoDB backup, restore, and maintenance operations
+LAST UPDATED: December 2024
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+1. UNDERSTANDING MONGODB DATA
+2. MANUAL BACKUP (mongodump)
+3. AUTOMATED DAILY BACKUPS
+4. RESTORE FROM BACKUP (mongorestore)
+5. EXPORTING DATA TO JSON/CSV
+6. IMPORTING DATA
+7. DATABASE MAINTENANCE
+8. PERFORMANCE MONITORING
+9. BACKUP BEST PRACTICES
+10. DISASTER RECOVERY
+
+================================================================================
+SECTION 1: UNDERSTANDING MONGODB DATA
+================================================================================
+
+WHAT IS STORED IN MONGODB?
+-------------------------
+Smart Cafe stores ALL application data in MongoDB:
+
+DATABASE: smartcafe_cinema
+
+COLLECTIONS (Tables):
+--------------------
+1. users
+   - Staff accounts (admin, cashier)
+   - Passwords (hashed with bcrypt)
+   - Permissions
+
+2. products
+   - All items for sale (popcorn, drinks, etc.)
+   - Prices, stock levels, images
+   - Categories
+
+3. bills
+   - All completed sales
+   - Customer bills with line items
+   - Payment details, totals
+
+4. orders
+   - Customer orders in process
+   - Before converting to bills
+
+5. purchases
+   - Stock purchases from suppliers
+   - Purchase orders, received items
+
+6. suppliers
+   - Supplier information
+   - Contact details
+
+7. readyitems
+   - Quick-add items (water bottles, etc.)
+   - Pre-configured products
+
+8. stockledger
+   - Stock movement history
+   - Audit trail for inventory changes
+
+9. maincodes (legacy)
+   - Product categories
+
+10. subcodes (legacy)
+    - Product variations
+
+
+WHERE DATA IS STORED:
+--------------------
+Physical location: /var/lib/mongodb/
+
+File structure:
+  /var/lib/mongodb/
+    ├── collection-*.wt      (Data files)
+    ├── WiredTiger.*         (Storage engine files)
+    ├── mongod.lock          (Lock file)
+    └── journal/             (Write-ahead log)
+
+
+DATA SIZE ESTIMATION:
+--------------------
+Typical Smart Cafe installation:
+
+Initial (empty):
+  - Database: ~50MB
+
+After 1 month:
+  - 1000 bills × 5KB = 5MB
+  - 500 products × 2KB = 1MB
+  - Stock ledger × 10KB = 5MB
+  - Total: ~60MB
+
+After 1 year:
+  - 50,000 bills = 250MB
+  - Products/Stock = 50MB
+  - Total: ~350MB
+
+Large cinema (5 years):
+  - 250,000 bills = 1.25GB
+  - Complete dataset: ~2GB
+
+Backup size: ~50% of database size (compressed)
+
+================================================================================
+SECTION 2: MANUAL BACKUP (mongodump)
+================================================================================
+
+WHAT IS MONGODUMP?
+-----------------
+mongodump is MongoDB's backup tool:
+  - Creates binary backup of database
+  - Fast and efficient
+  - Preserves all data types and indexes
+  - Can backup while database is running (no downtime!)
+
+
+BASIC BACKUP COMMAND:
+--------------------
+mongodump --db smartcafe_cinema --out /root/backups/
+
+Explanation:
+  --db smartcafe_cinema
+    - Database name to backup
+    - Omit to backup ALL databases
+
+  --out /root/backups/
+    - Output directory
+    - Creates: /root/backups/smartcafe_cinema/
+
+What happens:
+  1. Connects to MongoDB (localhost:27017)
+  2. Reads all collections
+  3. Creates BSON files (binary JSON)
+  4. Creates metadata.json for each collection
+  5. Takes 5-30 seconds for typical cinema data
+
+
+BACKUP OUTPUT:
+-------------
+After running mongodump:
+
+/root/backups/smartcafe_cinema/
+  ├── users.bson
+  ├── users.metadata.json
+  ├── products.bson
+  ├── products.metadata.json
+  ├── bills.bson
+  ├── bills.metadata.json
+  └── ... (all collections)
+
+.bson files:
+  - Binary data
+  - Efficient, compact
+  - Preserves MongoDB data types
+
+.metadata.json files:
+  - Collection schema
+  - Index definitions
+  - Collection options
+
+
+BACKUP WITH TIMESTAMP:
+---------------------
+Best practice: Include date in backup name
+
+DATE=$(date +%Y%m%d_%H%M%S)
+mongodump --db smartcafe_cinema --out /root/backups/backup_$DATE
+
+Creates:
+  /root/backups/backup_20241216_143022/smartcafe_cinema/
+
+Now you can keep multiple backups!
+
+
+BACKUP WITH COMPRESSION:
+-----------------------
+Saves disk space (50-70% smaller)
+
+mongodump --db smartcafe_cinema --gzip --out /root/backups/
+
+Files become:
+  users.bson.gz
+  products.bson.gz
+  etc.
+
+
+VERIFY BACKUP:
+-------------
+Check backup size:
+  du -sh /root/backups/backup_20241216_143022
+
+Expected output:
+  25M    /root/backups/backup_20241216_143022
+
+List backed up collections:
+  ls -lh /root/backups/backup_20241216_143022/smartcafe_cinema/
+
+Should see all .bson files
+
+
+BACKUP SPECIFIC COLLECTION:
+--------------------------
+If you only need one collection:
+
+mongodump --db smartcafe_cinema --collection bills --out /root/backups/
+
+Only backs up bills collection.
+
+================================================================================
+SECTION 3: AUTOMATED DAILY BACKUPS
+================================================================================
+
+WHY AUTOMATED BACKUPS?
+---------------------
+Manual backups are:
+  ❌ Easy to forget
+  ❌ Inconsistent timing
+  ❌ Human error
+
+Automated backups are:
+  ✓ Run every day automatically
+  ✓ Consistent schedule
+  ✓ Reliable
+  ✓ Peace of mind
+
+
+CREATE BACKUP SCRIPT:
+--------------------
+Step 1: Create script file
+
+nano /root/backup-mongodb.sh
+
+Script contents:
+-------------------- SCRIPT START --------------------
+#!/bin/bash
+
+# MongoDB Backup Script for Smart Cafe
+# Runs daily via cron
+
+# Configuration
+BACKUP_DIR="/root/backups/mongodb"
+DB_NAME="smartcafe_cinema"
+RETENTION_DAYS=7
+
+# Create backup directory if doesn't exist
+mkdir -p $BACKUP_DIR
+
+# Generate timestamp
+DATE=$(date +%Y%m%d_%H%M%S)
+BACKUP_PATH="$BACKUP_DIR/backup_$DATE"
+
+# Log file
+LOG_FILE="$BACKUP_DIR/backup.log"
+
+# Start backup
+echo "========================================" >> $LOG_FILE
+echo "Backup started: $(date)" >> $LOG_FILE
+
+# Run mongodump
+mongodump --db $DB_NAME --gzip --out $BACKUP_PATH >> $LOG_FILE 2>&1
+
+# Check if backup succeeded
+if [ $? -eq 0 ]; then
+    echo "✓ Backup completed successfully" >> $LOG_FILE
+    BACKUP_SIZE=$(du -sh $BACKUP_PATH | cut -f1)
+    echo "  Backup size: $BACKUP_SIZE" >> $LOG_FILE
+else
+    echo "✗ Backup failed!" >> $LOG_FILE
+fi
+
+# Delete backups older than RETENTION_DAYS
+find $BACKUP_DIR -type d -name "backup_*" -mtime +$RETENTION_DAYS -exec rm -rf {} \;
+
+echo "Old backups cleaned (keeping last $RETENTION_DAYS days)" >> $LOG_FILE
+echo "Backup ended: $(date)" >> $LOG_FILE
+echo "========================================" >> $LOG_FILE
+
+# Count current backups
+BACKUP_COUNT=$(ls -1 $BACKUP_DIR | grep -c "backup_")
+echo "Total backups: $BACKUP_COUNT" >> $LOG_FILE
+-------------------- SCRIPT END --------------------
+
+Save: Ctrl+O, Enter, Ctrl+X
+
+
+SCRIPT EXPLANATION:
+------------------
+BACKUP_DIR="/root/backups/mongodb"
+  - Where backups are stored
+  - Change if you want different location
+
+RETENTION_DAYS=7
+  - Keep last 7 days of backups
+  - Automatically deletes older backups
+  - Adjust: 7 (1 week), 30 (1 month), 90 (3 months)
+
+DATE=$(date +%Y%m%d_%H%M%S)
+  - Creates timestamp: 20241216_143022
+  - Each backup has unique name
+
+mongodump --gzip
+  - Compresses backup (saves space)
+
+find ... -mtime +$RETENTION_DAYS -exec rm -rf {} \;
+  - Finds backups older than 7 days
+  - Deletes them automatically
+  - Prevents disk from filling up
+
+LOG_FILE
+  - Records backup history
+  - Check if backups are working
+  - Troubleshoot failures
+
+
+MAKE SCRIPT EXECUTABLE:
+-----------------------
+chmod +x /root/backup-mongodb.sh
+
+Test run:
+  /root/backup-mongodb.sh
+
+Check log:
+  cat /root/backups/mongodb/backup.log
+
+Expected output:
+  ========================================
+  Backup started: Mon Dec 16 14:30:22 UTC 2024
+  ✓ Backup completed successfully
+    Backup size: 25M
+  Old backups cleaned (keeping last 7 days)
+  Backup ended: Mon Dec 16 14:30:45 UTC 2024
+  Total backups: 1
+  ========================================
+
+
+SCHEDULE DAILY BACKUP (CRON):
+-----------------------------
+What this does: Runs backup automatically every day
+
+Step 1: Open crontab editor
+  crontab -e
+
+If first time, choose editor:
+  Select 1 (nano)
+
+Step 2: Add backup schedule
+  # Smart Cafe MongoDB Backup - Daily at 2 AM
+  0 2 * * * /root/backup-mongodb.sh
+
+Save and exit: Ctrl+X, Y, Enter
+
+CRON SYNTAX EXPLAINED:
+  0 2 * * *
+  │ │ │ │ │
+  │ │ │ │ └─── Day of week (0-7, 0=Sunday)
+  │ │ │ └───── Month (1-12)
+  │ │ └─────── Day of month (1-31)
+  │ └───────── Hour (0-23)
+  └─────────── Minute (0-59)
+
+Examples:
+  0 2 * * *        Daily at 2:00 AM (recommended)
+  0 */6 * * *      Every 6 hours
+  30 1 * * *       Daily at 1:30 AM
+  0 2 * * 0        Weekly on Sunday at 2:00 AM
+
+Verify cron job:
+  crontab -l
+
+Should show:
+  0 2 * * * /root/backup-mongodb.sh
+
+
+WHY 2 AM?
+--------
+Best time for backups:
+  - Cinema closed
+  - No customers
+  - Low server load
+  - Fast backup
+  - Doesn't impact operations
+
+If your cinema has late shows:
+  - Use 3 AM or 4 AM
+  - After last show ends
+
+
+TEST AUTOMATED BACKUP:
+---------------------
+Don't wait until 2 AM! Test now:
+
+Temporarily change cron to run in 2 minutes:
+  1. Check current time: date
+     Example: 14:30
+
+  2. Edit cron: crontab -e
+     Add: 32 14 * * * /root/backup-mongodb.sh
+     (If current time is 14:30, this runs at 14:32)
+
+  3. Wait 2 minutes
+
+  4. Check log: cat /root/backups/mongodb/backup.log
+
+  5. Remove test entry: crontab -e
+     Delete test line
+     Keep: 0 2 * * *
+
+================================================================================
+SECTION 4: RESTORE FROM BACKUP (mongorestore)
+================================================================================
+
+WHEN TO RESTORE:
+---------------
+Restore backup when:
+  ✓ Data accidentally deleted
+  ✓ Database corruption
+  ✓ Moving to new server
+  ✓ Recovering from hardware failure
+  ✓ Undoing mistakes
+  ✓ Testing/development
+
+
+⚠️ WARNING: RESTORE OVERWRITES DATA!
+----------------------------------
+Before restoring:
+  1. BACKUP CURRENT DATA FIRST
+  2. Verify backup is correct
+  3. Stop application (PM2)
+  4. Restore
+  5. Restart application
+
+
+BASIC RESTORE COMMAND:
+---------------------
+mongorestore --db smartcafe_cinema /root/backups/backup_20241216_143022/smartcafe_cinema/
+
+Explanation:
+  --db smartcafe_cinema
+    - Target database name
+    - Creates if doesn't exist
+
+  /path/to/backup/
+    - Directory containing .bson files
+
+What happens:
+  1. Connects to MongoDB
+  2. Reads .bson files
+  3. Recreates collections
+  4. Imports all documents
+  5. Rebuilds indexes
+  6. Takes 30-90 seconds
+
+
+RESTORE WITH GZIP:
+-----------------
+If backup was compressed:
+
+mongorestore --db smartcafe_cinema --gzip /root/backups/backup_20241216_143022/smartcafe_cinema/
+
+
+RESTORE SPECIFIC COLLECTION:
+---------------------------
+Only restore one collection:
+
+mongorestore --db smartcafe_cinema --collection bills /root/backups/backup_20241216_143022/smartcafe_cinema/bills.bson
+
+Example: Restore only users after accidental deletion
+
+
+COMPLETE RESTORE PROCEDURE:
+--------------------------
+Step-by-step for production:
+
+1. Backup current database first:
+     mongodump --db smartcafe_cinema --out /root/backups/before_restore_$(date +%Y%m%d_%H%M%S)
+
+2. Stop application:
+     pm2 stop smartcafe-backend
+
+3. List available backups:
+     ls -lh /root/backups/mongodb/
+
+4. Choose backup to restore:
+     BACKUP_TO_RESTORE="/root/backups/mongodb/backup_20241216_143022"
+
+5. Test restore (dry-run doesn't exist, so restore to test DB):
+     mongorestore --db test_restore --gzip $BACKUP_TO_RESTORE/smartcafe_cinema/
+
+6. Verify test restore:
+     mongosh test_restore --eval "db.bills.countDocuments()"
+
+7. If OK, restore to production:
+     mongorestore --db smartcafe_cinema --drop --gzip $BACKUP_TO_RESTORE/smartcafe_cinema/
+
+   --drop flag:
+     - Drops existing collections before restore
+     - Ensures clean state
+
+8. Verify restore:
+     mongosh smartcafe_cinema --eval "
+       print('Users: ' + db.users.countDocuments());
+       print('Products: ' + db.products.countDocuments());
+       print('Bills: ' + db.bills.countDocuments());
+     "
+
+9. Start application:
+     pm2 start smartcafe-backend
+
+10. Test application in browser
+
+
+TROUBLESHOOTING RESTORE:
+-----------------------
+Error: "Failed: error restoring from ... : error writing data for collection ... : E11000 duplicate key error"
+
+Cause: Collection already exists with conflicting data
+
+Solution: Use --drop flag
+  mongorestore --drop --db smartcafe_cinema ...
+
+
+Error: "Failed: smartcafe_cinema.users: error writing data ... : no reachable servers"
+
+Cause: MongoDB not running
+
+Solution: Start MongoDB
+  systemctl start mongod
+
+
+Error: "Failed to parse ... : EOF"
+
+Cause: Corrupted backup file
+
+Solution: Use different backup
+  ls -lh /root/backups/mongodb/
+
+================================================================================
+SECTION 5: EXPORTING DATA TO JSON/CSV
+================================================================================
+
+WHY EXPORT?
+----------
+Export data for:
+  - Sharing with accountant
+  - Excel analysis
+  - Reports for management
+  - Data migration
+  - Backup readable format
+
+
+EXPORT COLLECTION TO JSON:
+-------------------------
+mongoexport --db smartcafe_cinema --collection bills --out bills.json
+
+Creates: bills.json with all bills
+
+View first 5 lines:
+  head -n 5 bills.json
+
+Example output:
+  {"_id":{"$oid":"64abc123..."},"billNo":"BL0001","customerName":"John","total":500,...}
+  {"_id":{"$oid":"64abc124..."},"billNo":"BL0002","customerName":"Mary","total":750,...}
+
+
+EXPORT TO CSV (FOR EXCEL):
+-------------------------
+mongoexport --db smartcafe_cinema --collection bills --type=csv --fields billNo,billDate,customerName,total --out bills.csv
+
+Open in Excel: bills.csv
+
+--fields: Comma-separated column names
+
+Example: Export today's sales to CSV
+  TODAY=$(date +%Y-%m-%d)
+  mongoexport --db smartcafe_cinema --collection bills --type=csv \
+    --fields billNo,billDate,customerName,subtotal,tax,total,paymentMode \
+    --query "{\"billDate\":{\"\$gte\":{\"\$date\":\"${TODAY}T00:00:00.000Z\"}}}" \
+    --out sales_$TODAY.csv
+
+
+EXPORT WITH QUERY (FILTER):
+--------------------------
+Export only December 2024 bills:
+
+mongoexport --db smartcafe_cinema --collection bills \
+  --query '{"billDate":{"$gte":{"$date":"2024-12-01T00:00:00.000Z"},"$lt":{"$date":"2025-01-01T00:00:00.000Z"}}}' \
+  --out bills_december_2024.json
+
+
+PRETTY JSON FORMAT:
+------------------
+mongoexport --db smartcafe_cinema --collection bills --pretty --out bills_pretty.json
+
+Easier to read (but larger file size)
+
+This completes the MongoDB backup and restore guide.
+Continue to 05-CODE-UPDATE-REDEPLOYMENT.txt for updating your application.
+
+================================================================================
+END OF MONGODB BACKUP GUIDE
+================================================================================

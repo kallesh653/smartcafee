@@ -1,0 +1,709 @@
+================================================================================
+        NGINX ADVANCED CONFIGURATION GUIDE
+        COMPLETE NGINX SETUP FOR HIGH-TRAFFIC CINEMA APPLICATION
+================================================================================
+
+VERSION: 2.0.0
+PURPOSE: Configure Nginx for maximum performance and security
+LAST UPDATED: December 2024
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+1. UNDERSTANDING NGINX ROLE
+2. BASIC NGINX CONFIGURATION
+3. ADVANCED PERFORMANCE OPTIMIZATION
+4. LOAD BALANCING CONFIGURATION
+5. CACHING STRATEGIES
+6. SECURITY HEADERS
+7. RATE LIMITING
+8. COMPRESSION AND OPTIMIZATION
+9. TROUBLESHOOTING NGINX
+
+================================================================================
+SECTION 1: UNDERSTANDING NGINX ROLE
+================================================================================
+
+WHAT IS NGINX?
+-------------
+Nginx (pronounced "engine-x") is a web server and reverse proxy.
+
+In Smart Cafe deployment, Nginx serves MULTIPLE purposes:
+
+1. REVERSE PROXY
+   - Frontend requests → Nginx → Forward to backend Node.js
+   - Hides backend from direct access
+   - Single entry point for entire application
+
+2. STATIC FILE SERVER
+   - Serves frontend files (HTML, CSS, JavaScript, images)
+   - Much faster than Node.js for static content
+   - Handles 10,000+ requests/second
+
+3. LOAD BALANCER
+   - Distributes traffic across multiple backend instances
+   - PM2 runs 2 backend instances (cluster mode)
+   - Nginx distributes requests evenly
+
+4. SSL/TLS TERMINATION
+   - Handles HTTPS encryption/decryption
+   - Backend communicates with Nginx via HTTP (faster)
+   - Centralizes certificate management
+
+5. CACHING
+   - Stores frequently accessed content
+   - Reduces backend load
+   - Faster response times
+
+6. COMPRESSION
+   - Gzips responses before sending to clients
+   - Reduces bandwidth usage by 70-80%
+
+7. SECURITY
+   - Rate limiting (prevents DDoS)
+   - Security headers
+   - Access control
+
+REQUEST FLOW EXAMPLE:
+--------------------
+Customer opens: https://smartcafe.gentime.in
+
+1. Browser → [HTTPS Request] → Nginx (port 443)
+2. Nginx decrypts HTTPS → checks cache
+3. If cached: Return from cache ✓
+4. If not cached:
+   - Checks if URL is for API (/api/*)
+   - If API: Proxy to backend (localhost:5003)
+   - If not API: Serve from /dist folder
+5. Nginx compresses response
+6. Nginx encrypts with SSL
+7. Nginx → [HTTPS Response] → Browser
+
+================================================================================
+SECTION 2: BASIC NGINX CONFIGURATION
+================================================================================
+
+NGINX DIRECTORY STRUCTURE:
+-------------------------
+/etc/nginx/
+  ├── nginx.conf                 (Main configuration)
+  ├── sites-available/           (Available site configs)
+  │   ├── smartcafe             (Frontend config)
+  │   └── smartcafeapi          (Backend API config)
+  ├── sites-enabled/            (Active site configs - symlinks)
+  │   ├── smartcafe → ../sites-available/smartcafe
+  │   └── smartcafeapi → ../sites-available/smartcafeapi
+  └── conf.d/                   (Additional configs)
+
+
+STEP 2.1: CREATE BACKEND API CONFIGURATION
+------------------------------------------
+What this does: Configures Nginx to proxy requests to backend
+
+Create file:
+  nano /etc/nginx/sites-available/smartcafeapi
+
+Configuration:
+-------------------- FILE START --------------------
+# Smart Cafe Backend API Configuration
+# This configuration handles all API requests
+
+# UPSTREAM BLOCK
+# Defines backend servers for load balancing
+upstream smartcafe_backend {
+    # Load balancing method
+    # least_conn: Sends requests to server with least active connections
+    # Other options: round_robin (default), ip_hash (sticky sessions)
+    least_conn;
+
+    # Backend server 1 (PM2 instance 1)
+    server 127.0.0.1:5003 max_fails=3 fail_timeout=30s;
+
+    # If you want multiple backend servers (advanced):
+    # server 127.0.0.1:5003 max_fails=3 fail_timeout=30s weight=1;
+    # server 127.0.0.1:5004 max_fails=3 fail_timeout=30s weight=1;
+
+    # Connection pooling
+    # Keeps connections alive between Nginx and backend
+    # Reduces connection overhead
+    keepalive 32;
+}
+
+# SERVER BLOCK
+server {
+    # Listen on port 80 (HTTP)
+    listen 80;
+
+    # Server name - your domain for backend API
+    server_name smartcafeapi.gentime.in;
+
+    # Change smartcafeapi.gentime.in to YOUR domain
+    # Or use IP: server_name 72.61.238.39;
+
+    # =========================================
+    # TIMEOUT CONFIGURATION FOR CINEMA RUSH HOURS
+    # =========================================
+
+    # Proxy connect timeout
+    # Time Nginx waits to establish connection with backend
+    # 300s = 5 minutes (high for rush hours when backend might be busy)
+    proxy_connect_timeout 300s;
+
+    # Proxy send timeout
+    # Time Nginx waits to send request to backend
+    proxy_send_timeout 300s;
+
+    # Proxy read timeout
+    # Time Nginx waits for response from backend
+    # Important for slow queries during high load
+    proxy_read_timeout 300s;
+
+    # Send timeout
+    # Time Nginx waits to send response to client
+    send_timeout 300s;
+
+    # =========================================
+    # CLIENT SETTINGS
+    # =========================================
+
+    # Maximum file upload size
+    # 10MB for product images
+    client_max_body_size 10M;
+
+    # Client body buffer size
+    # Memory buffer for request body
+    client_body_buffer_size 128k;
+
+    # =========================================
+    # LOCATION BLOCK - ROOT PATH
+    # =========================================
+
+    location / {
+        # Proxy pass to upstream backend
+        proxy_pass http://smartcafe_backend;
+
+        # HTTP version
+        # 1.1 required for WebSockets and keepalive
+        proxy_http_version 1.1;
+
+        # =========================================
+        # HEADERS FOR PROXYING
+        # =========================================
+
+        # Upgrade header for WebSocket support
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        # Host header
+        # Sends original host to backend
+        proxy_set_header Host $host;
+
+        # Bypass cache on upgrade
+        proxy_cache_bypass $http_upgrade;
+
+        # Real IP forwarding
+        # Backend sees real client IP, not Nginx IP
+        proxy_set_header X-Real-IP $remote_addr;
+
+        # Forwarded-For chain
+        # Shows all proxies in request chain
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+        # Protocol forwarding
+        # Backend knows if original request was HTTP or HTTPS
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # =========================================
+        # BUFFER OPTIMIZATION FOR HIGH TRAFFIC
+        # =========================================
+
+        # Enable buffering
+        # Nginx buffers response before sending to client
+        # Frees backend faster
+        proxy_buffering on;
+
+        # Buffer size for response headers
+        proxy_buffer_size 4k;
+
+        # Number and size of buffers for response body
+        # 8 buffers × 4k each = 32k total
+        proxy_buffers 8 4k;
+
+        # Busy buffer size
+        # Buffers that can send to client while still receiving from backend
+        proxy_busy_buffers_size 8k;
+
+        # Connection reuse
+        # Empty string enables HTTP keepalive to backend
+        proxy_set_header Connection "";
+    }
+
+    # =========================================
+    # SECURITY HEADERS
+    # =========================================
+
+    # X-Frame-Options
+    # Prevents clickjacking attacks
+    # SAMEORIGIN: Page can only be framed by same domain
+    add_header X-Frame-Options "SAMEORIGIN" always;
+
+    # X-Content-Type-Options
+    # Prevents MIME-type sniffing
+    add_header X-Content-Type-Options "nosniff" always;
+
+    # X-XSS-Protection
+    # Enables browser XSS filter
+    add_header X-XSS-Protection "1; mode=block" always;
+}
+-------------------- FILE END --------------------
+
+SAVE FILE:
+  Ctrl + O, Enter, Ctrl + X
+
+
+STEP 2.2: CREATE FRONTEND CONFIGURATION
+--------------------------------------
+What this does: Serves frontend static files and handles routing
+
+Create file:
+  nano /etc/nginx/sites-available/smartcafe
+
+Configuration:
+-------------------- FILE START --------------------
+# Smart Cafe Frontend Configuration
+
+server {
+    # Listen on port 80 (HTTP)
+    listen 80;
+
+    # Server name - your domain for frontend
+    server_name smartcafe.gentime.in;
+
+    # Change to YOUR domain or IP
+
+    # =========================================
+    # DOCUMENT ROOT
+    # =========================================
+
+    # Root directory where frontend files are located
+    root /root/smartcafee/frontend/dist;
+
+    # Default file to serve
+    index index.html;
+
+    # =========================================
+    # GZIP COMPRESSION
+    # =========================================
+
+    # Enable gzip compression
+    # Reduces bandwidth by 70-80%
+    gzip on;
+
+    # Vary header for caching
+    # Tells caches to store both compressed and uncompressed versions
+    gzip_vary on;
+
+    # Minimum file size to compress
+    # Files smaller than 1KB don't benefit from compression
+    gzip_min_length 1024;
+
+    # Compress proxied requests
+    # any: Compress all proxied requests
+    gzip_proxied any;
+
+    # Compression level (1-9)
+    # 6 is optimal balance between compression and CPU usage
+    # Higher = more compression but more CPU
+    gzip_comp_level 6;
+
+    # File types to compress
+    gzip_types text/plain text/css text/xml text/javascript
+               application/x-javascript application/xml+rss
+               application/json application/javascript;
+
+    # =========================================
+    # FRONTEND ROUTES (SPA)
+    # =========================================
+
+    # Main location block
+    # Handles all URLs
+    location / {
+        # try_files: Tries files in order
+        # $uri: Try exact file (e.g., /logo.png → /logo.png)
+        # $uri/: Try as directory with index.html
+        # /index.html: Fallback to index.html (for React Router)
+        try_files $uri $uri/ /index.html;
+
+        # Cache control for HTML files
+        # 1h: Cache for 1 hour
+        expires 1h;
+        add_header Cache-Control "public, must-revalidate";
+    }
+
+    # =========================================
+    # STATIC ASSETS CACHING
+    # =========================================
+
+    # Cache JavaScript, CSS, images for 1 year
+    # These files have hash in name (e.g., index.abc123.js)
+    # If file changes, name changes, so safe to cache long-term
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        # Cache for 1 year
+        expires 1y;
+
+        # Immutable: File will never change
+        # Browser won't revalidate even on refresh
+        add_header Cache-Control "public, immutable";
+    }
+
+    # =========================================
+    # SERVE UPLOADED FILES
+    # =========================================
+
+    # Product images and uploads
+    location /uploads {
+        # Alias to actual directory
+        alias /root/smartcafee/backend/uploads;
+
+        # Cache for 30 days
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # =========================================
+    # SECURITY HEADERS
+    # =========================================
+
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+}
+-------------------- FILE END --------------------
+
+
+STEP 2.3: ENABLE SITES
+---------------------
+What this does: Activates configurations
+
+Commands:
+  # Create symbolic links
+  ln -sf /etc/nginx/sites-available/smartcafe /etc/nginx/sites-enabled/
+  ln -sf /etc/nginx/sites-available/smartcafeapi /etc/nginx/sites-enabled/
+
+  # Remove default site
+  rm -f /etc/nginx/sites-enabled/default
+
+Explanation:
+  - ln -sf: Creates symbolic link (shortcut)
+  - sites-enabled: Nginx reads configs from here
+  - Removing default: Avoids conflicts
+
+
+STEP 2.4: TEST NGINX CONFIGURATION
+---------------------------------
+What this does: Validates configuration syntax
+⚠️ ALWAYS test before reloading!
+
+Command:
+  nginx -t
+
+Expected output:
+  nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+  nginx: configuration file /etc/nginx/nginx.conf test is successful
+
+If errors:
+  - Read error message carefully
+  - Common errors:
+    * Missing semicolon ;
+    * Unclosed bracket { or }
+    * Wrong path in root directive
+    * Invalid directive name
+
+
+STEP 2.5: RELOAD NGINX
+---------------------
+What this does: Applies new configuration without downtime
+
+Command:
+  systemctl reload nginx
+
+Or if reload doesn't work:
+  systemctl restart nginx
+
+Verify:
+  systemctl status nginx
+
+Expected:
+  Active: active (running)
+
+================================================================================
+SECTION 3: ADVANCED PERFORMANCE OPTIMIZATION
+================================================================================
+
+NGINX WORKER OPTIMIZATION
+------------------------
+What this does: Configures Nginx for multi-core CPUs
+
+Edit main config:
+  nano /etc/nginx/nginx.conf
+
+Find and modify:
+
+# WORKER PROCESSES
+# Number of worker processes
+# auto: Nginx detects CPU cores automatically
+# For 4-core CPU: 4 workers
+worker_processes auto;
+
+# WORKER CONNECTIONS
+# Maximum connections per worker
+# 1024 = conservative
+# 4096 = high traffic
+# Calculate: worker_processes × worker_connections = max concurrent connections
+# Example: 4 workers × 1024 = 4,096 concurrent connections
+events {
+    worker_connections 2048;
+
+    # Use efficient connection processing method
+    # epoll: Most efficient on Linux
+    use epoll;
+
+    # Accept multiple connections at once
+    multi_accept on;
+}
+
+Explanation:
+  - worker_processes auto: Let Nginx auto-detect (best practice)
+  - worker_connections 2048: Each worker handles 2048 connections
+  - epoll: Linux-specific, most efficient
+  - multi_accept on: Accept all new connections immediately
+
+
+HTTP OPTIMIZATIONS
+-----------------
+Still in nginx.conf, in http block:
+
+http {
+    # =========================================
+    # KEEP-ALIVE OPTIMIZATION
+    # =========================================
+
+    # Keep connections alive
+    # Reuses TCP connections instead of creating new ones
+    keepalive_timeout 65;
+
+    # Maximum requests per connection
+    # After 100 requests, connection closes and reopens
+    # Prevents memory leaks
+    keepalive_requests 100;
+
+    # =========================================
+    # BUFFER SIZES
+    # =========================================
+
+    # Client body buffer
+    # Larger buffer = less disk I/O
+    client_body_buffer_size 128k;
+
+    # Client header buffer
+    client_header_buffer_size 1k;
+
+    # Large client header buffers
+    # For requests with many cookies
+    large_client_header_buffers 4 16k;
+
+    # =========================================
+    # SENDFILE OPTIMIZATION
+    # =========================================
+
+    # Use sendfile for static files
+    # Copies data directly from file to socket
+    # Bypasses user space (much faster)
+    sendfile on;
+
+    # Send headers in one packet
+    tcp_nopush on;
+
+    # Disable Nagle's algorithm
+    # Sends small packets immediately
+    tcp_nodelay on;
+
+    # =========================================
+    # FILE DESCRIPTOR CACHE
+    # =========================================
+
+    # Cache open file descriptors
+    # Reduces filesystem overhead
+    open_file_cache max=10000 inactive=20s;
+    open_file_cache_valid 30s;
+    open_file_cache_min_uses 2;
+    open_file_cache_errors on;
+
+    # Rest of config...
+}
+
+Save and test:
+  nginx -t
+  systemctl reload nginx
+
+
+================================================================================
+SECTION 4: LOAD BALANCING FOR MULTIPLE BACKENDS
+================================================================================
+
+ADVANCED UPSTREAM CONFIGURATION
+------------------------------
+If you scale to multiple backend servers:
+
+upstream smartcafe_backend {
+    # Load balancing methods:
+    # 1. least_conn (used) - least active connections
+    # 2. round_robin (default) - each server in turn
+    # 3. ip_hash - same client always to same server
+    least_conn;
+
+    # Server 1
+    server 127.0.0.1:5003 max_fails=3 fail_timeout=30s weight=1;
+
+    # Server 2 (if you add another instance)
+    # server 127.0.0.1:5004 max_fails=3 fail_timeout=30s weight=1;
+
+    # Health check parameters:
+    # max_fails: Mark server as down after 3 consecutive failures
+    # fail_timeout: Time to consider server down (30 seconds)
+    # weight: Higher weight = more requests (default 1)
+
+    # Keepalive connections
+    keepalive 32;
+    keepalive_timeout 60s;
+    keepalive_requests 100;
+}
+
+EXPLANATION OF LOAD BALANCING METHODS:
+
+1. LEAST_CONN (Best for Cinema)
+   - Sends requests to server with fewest active connections
+   - Good for: Long-running requests, variable processing times
+   - Cinema scenario: Some bills take longer to process
+
+2. ROUND_ROBIN (Default)
+   - Rotates through servers in order
+   - Server 1 → Server 2 → Server 1 → Server 2...
+   - Good for: Equal capacity servers, predictable load
+
+3. IP_HASH (Sticky Sessions)
+   - Same client always goes to same server
+   - Based on client IP address
+   - Good for: Sessions, caching
+   - Not ideal for cinema (clients share IPs)
+
+4. WEIGHTED
+   - Distributes based on weights
+   - weight=2 gets twice as many requests as weight=1
+   - Good for: Servers with different capacities
+
+================================================================================
+SECTION 5: CACHING STRATEGIES
+================================================================================
+
+NGINX CACHING FOR API RESPONSES
+------------------------------
+For GET requests that don't change often:
+
+# In http block
+proxy_cache_path /var/cache/nginx/smartcafe
+                 levels=1:2
+                 keys_zone=smartcafe_cache:10m
+                 max_size=100m
+                 inactive=60m
+                 use_temp_path=off;
+
+# In server block
+location /api/products {
+    proxy_cache smartcafe_cache;
+    proxy_cache_valid 200 5m;  # Cache successful responses for 5 minutes
+    proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+    proxy_cache_lock on;
+
+    # Add cache status header (for debugging)
+    add_header X-Cache-Status $upstream_cache_status;
+
+    proxy_pass http://smartcafe_backend;
+}
+
+Explanation:
+  - proxy_cache_path: Where to store cache
+  - levels=1:2: Directory structure (optimization)
+  - keys_zone: 10MB memory for cache keys
+  - max_size: Maximum 100MB disk space
+  - inactive: Remove if not accessed for 60 minutes
+  - proxy_cache_valid: Cache 200 responses for 5 minutes
+  - proxy_cache_use_stale: Serve stale cache if backend fails
+
+Cache headers:
+  - HIT: Served from cache
+  - MISS: Not in cache, fetched from backend
+  - EXPIRED: Cache expired, revalidated
+  - UPDATING: Cache updating in background
+
+⚠️ WARNING: Don't cache:
+  - POST, PUT, DELETE requests (only GET)
+  - User-specific data
+  - Real-time data
+  - Authentication endpoints
+
+================================================================================
+SECTION 6: RATE LIMITING
+================================================================================
+
+PROTECTING AGAINST ABUSE
+-----------------------
+Limit requests per IP to prevent DDoS:
+
+# In http block
+# Zone: "one" - 10MB memory, tracks IPs
+# Rate: 10 requests per second per IP
+limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;
+limit_req_zone $binary_remote_addr zone=login_limit:10m rate=5r/m;
+
+# In server block
+location /api/ {
+    # Apply rate limiting
+    limit_req zone=api_limit burst=20 nodelay;
+
+    # burst: Allow up to 20 requests in burst
+    # nodelay: Don't delay requests within burst
+
+    # Status code for rate limit
+    limit_req_status 429;
+
+    proxy_pass http://smartcafe_backend;
+}
+
+location /api/auth/login {
+    # Stricter limit for login
+    limit_req zone=login_limit burst=3 nodelay;
+
+    proxy_pass http://smartcafe_backend;
+}
+
+Explanation:
+  - rate=10r/s: 10 requests per second
+  - burst=20: Allow burst up to 20 requests
+  - nodelay: Process burst immediately
+  - 429: HTTP status "Too Many Requests"
+
+Rate limiting prevents:
+  - DDoS attacks
+  - Brute force login attempts
+  - API abuse
+  - Excessive resource usage
+
+This completes the Nginx advanced configuration guide.
+Continue to 03-SSL-SECURITY-SETUP.txt for SSL/HTTPS setup.
+
+================================================================================
+END OF NGINX GUIDE
+================================================================================

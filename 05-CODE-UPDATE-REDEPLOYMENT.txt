@@ -1,0 +1,830 @@
+================================================================================
+        CODE UPDATE AND REDEPLOYMENT GUIDE
+        HOW TO DEPLOY UPDATED CODE TO PRODUCTION SERVER
+================================================================================
+
+VERSION: 2.0.0
+PURPOSE: Learn how to update your application when code changes
+LAST UPDATED: December 2024
+CRITICAL: This guide explains how to deploy updates WITHOUT breaking production!
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+1. UNDERSTANDING UPDATE PROCESS
+2. BEFORE YOU UPDATE (PREPARATION)
+3. UPDATING BACKEND CODE
+4. UPDATING FRONTEND CODE
+5. UPDATING BOTH (FULL UPDATE)
+6. ZERO-DOWNTIME DEPLOYMENT
+7. ROLLBACK PROCEDURES
+8. TESTING UPDATES
+9. COMMON UPDATE SCENARIOS
+10. TROUBLESHOOTING UPDATES
+
+================================================================================
+SECTION 1: UNDERSTANDING UPDATE PROCESS
+================================================================================
+
+WHEN DO YOU NEED TO UPDATE?
+--------------------------
+Update application when:
+  ✓ Bug fixes
+  ✓ New features added
+  ✓ Security patches
+  ✓ Performance improvements
+  ✓ UI/UX changes
+  ✓ Database schema changes
+
+
+HOW CODE GETS FROM LOCAL TO SERVER:
+----------------------------------
+Development Machine (Your PC)
+  ↓ (You make changes)
+  ↓ git add . && git commit -m "message"
+  ↓ git push origin main
+  ↓
+GitHub Repository
+  ↓ (Server pulls changes)
+  ↓ git pull origin main
+  ↓
+Production Server (VPS)
+
+
+UPDATE WORKFLOW:
+---------------
+1. Local Development:
+   - Make code changes on your PC
+   - Test locally: npm run dev
+   - Commit to git: git commit
+
+2. Push to GitHub:
+   - git push origin main
+   - Code now on GitHub
+
+3. Deploy to Server:
+   - SSH to server
+   - Pull latest code
+   - Install dependencies (if changed)
+   - Build frontend (if frontend changed)
+   - Restart backend (if backend changed)
+   - Test
+
+
+THREE TYPES OF UPDATES:
+----------------------
+1. FRONTEND ONLY
+   - React code changes
+   - UI modifications
+   - New components
+   - No backend restart needed
+
+2. BACKEND ONLY
+   - API changes
+   - Database logic
+   - New routes
+   - Backend restart needed
+
+3. FULL UPDATE
+   - Both frontend and backend
+   - Most common
+   - Full redeployment
+
+
+DOWNTIME DURING UPDATES:
+------------------------
+Frontend updates: ZERO downtime (just rebuild)
+Backend updates: 2-5 seconds (PM2 restart)
+Full updates: 30-60 seconds (build + restart)
+
+For cinema: Update during non-peak hours!
+
+================================================================================
+SECTION 2: BEFORE YOU UPDATE (PREPARATION)
+================================================================================
+
+PRE-UPDATE CHECKLIST:
+--------------------
+⚠️ COMPLETE BEFORE UPDATING!
+
+□ 1. BACKUP DATABASE
+     mongodump --db smartcafe_cinema --gzip --out /root/backups/before_update_$(date +%Y%m%d_%H%M%S)
+
+□ 2. TEST LOCALLY
+     cd smartcafe
+     npm run dev (frontend)
+     node backend/server.js (backend)
+     Verify everything works!
+
+□ 3. COMMIT AND PUSH
+     git status (check what changed)
+     git add .
+     git commit -m "Description of changes"
+     git push origin main
+
+□ 4. NOTE CURRENT STATE
+     pm2 list (note current status)
+     git log -1 (note current commit hash)
+
+□ 5. PLAN ROLLBACK
+     Have previous commit hash ready
+     Know how to restore database
+
+□ 6. SCHEDULE UPDATE
+     During low-traffic time:
+     - Cinema closed
+     - Between shows
+     - Late night
+     - Early morning
+
+
+VERIFY GIT REPOSITORY:
+--------------------
+On your local machine:
+
+Check current branch:
+  git branch
+
+Should show:
+  * main
+
+Check remote:
+  git remote -v
+
+Should show:
+  origin  https://github.com/kallesh653/smartcafee.git (fetch)
+  origin  https://github.com/kallesh653/smartcafee.git (push)
+
+Check commit history:
+  git log --oneline -5
+
+Shows last 5 commits with hashes
+
+
+PUSH CHANGES TO GITHUB:
+----------------------
+After making code changes:
+
+# Stage all changes
+git add .
+
+# Commit with descriptive message
+git commit -m "Fix: Corrected billing calculation for discounts"
+
+# Push to GitHub
+git push origin main
+
+If push requires authentication:
+  - Use GitHub Personal Access Token
+  - Set up SSH keys
+
+Verify on GitHub:
+  https://github.com/kallesh653/smartcafee
+  Check latest commit appears
+
+
+PREPARE SERVER:
+--------------
+SSH to server:
+  ssh root@72.61.238.39
+
+Check disk space:
+  df -h
+
+Ensure adequate space for build:
+  - Frontend build needs ~500MB temp space
+  - Node modules might grow
+
+Check current application status:
+  pm2 list
+  systemctl status mongod
+  systemctl status nginx
+
+All should be "active (running)"
+
+================================================================================
+SECTION 3: UPDATING BACKEND CODE
+================================================================================
+
+SCENARIO: Backend-only changes
+(API routes, database logic, controllers, etc.)
+
+STEP 3.1: SSH TO SERVER
+----------------------
+ssh root@72.61.238.39
+
+
+STEP 3.2: NAVIGATE TO PROJECT
+----------------------------
+cd /root/smartcafee/backend
+
+
+STEP 3.3: CHECK CURRENT STATE
+----------------------------
+# Check current branch
+git branch
+
+# Check for uncommitted changes
+git status
+
+If shows modified files:
+  ⚠️ Don't pull! You have local changes
+  Either:
+    - Commit them
+    - Discard them: git checkout .
+    - Stash them: git stash
+
+
+STEP 3.4: PULL LATEST CODE
+-------------------------
+git pull origin main
+
+Expected output:
+  remote: Counting objects: 10, done.
+  remote: Compressing objects: 100% (8/8), done.
+  remote: Total 10 (delta 5), reused 10 (delta 5)
+  Unpacking objects: 100% (10/10), done.
+  From https://github.com/kallesh653/smartcafee
+   * branch            main       -> FETCH_HEAD
+     abc1234..def5678  main       -> origin/main
+  Updating abc1234..def5678
+  Fast-forward
+   backend/controllers/billingController.js | 15 ++++++++-------
+   1 file changed, 8 insertions(+), 7 deletions(-)
+
+This shows:
+  - Files changed
+  - Lines added/removed
+  - Commit range
+
+
+STEP 3.5: INSTALL DEPENDENCIES (IF PACKAGE.JSON CHANGED)
+-------------------------------------------------------
+Check if package.json changed:
+  git diff HEAD~1 package.json
+
+If changes:
+  npm install --production
+
+If no changes: Skip this step
+
+
+STEP 3.6: RESTART BACKEND
+------------------------
+PM2 restart (zero downtime):
+  pm2 restart smartcafe-backend
+
+Expected output:
+  Use --update-env to update environment variables
+  [PM2] Applying action restartProcessId on app [smartcafe-backend](ids: [ 7, 8 ])
+  [PM2] [smartcafe-backend](7) ✓
+  [PM2] [smartcafe-backend](8) ✓
+
+PM2 does:
+  1. Starts new instances
+  2. Waits for them to be ready
+  3. Stops old instances
+  4. Downtime: ~2-3 seconds
+
+
+STEP 3.7: VERIFY UPDATE
+----------------------
+Check PM2 status:
+  pm2 status
+
+Both instances should be "online"
+
+Check logs for errors:
+  pm2 logs smartcafe-backend --lines 50
+
+Should show:
+  ✅ MongoDB Connected
+  Server running on port 5003
+
+Test API:
+  curl http://localhost:5003/api/health
+
+Expected:
+  {"success":true,"message":"Smart Cafe - Cinema Theater API is running",...}
+
+
+STEP 3.8: TEST IN BROWSER
+-------------------------
+Open: https://smartcafe.gentime.in
+  - Login as admin
+  - Test the changed feature
+  - Verify no errors in browser console (F12)
+
+
+BACKEND UPDATE COMPLETE! ✓
+
+If something broke: See "Rollback Procedures" section
+
+================================================================================
+SECTION 4: UPDATING FRONTEND CODE
+================================================================================
+
+SCENARIO: Frontend-only changes
+(React components, styles, UI changes, etc.)
+
+STEP 4.1: SSH TO SERVER
+----------------------
+ssh root@72.61.238.39
+
+
+STEP 4.2: NAVIGATE TO FRONTEND
+-----------------------------
+cd /root/smartcafee/frontend
+
+
+STEP 4.3: PULL LATEST CODE
+-------------------------
+git pull origin main
+
+Check what changed:
+  git log -1 --stat
+
+Shows files modified in latest commit
+
+
+STEP 4.4: INSTALL DEPENDENCIES (IF PACKAGE.JSON CHANGED)
+-------------------------------------------------------
+Check if package.json changed:
+  git diff HEAD~1 package.json
+
+If changed:
+  npm install
+
+Takes 2-3 minutes
+
+
+STEP 4.5: UPDATE API CONFIGURATION (IF NEEDED)
+---------------------------------------------
+Verify .env.production exists:
+  cat .env.production
+
+Should show:
+  VITE_API_URL=https://smartcafeapi.gentime.in
+
+If missing or wrong:
+  echo "VITE_API_URL=https://smartcafeapi.gentime.in" > .env.production
+
+
+STEP 4.6: BUILD FRONTEND
+-----------------------
+This is CRITICAL step!
+
+npm run build
+
+Expected output:
+  vite v5.4.21 building for production...
+  transforming...
+  ✓ 4245 modules transformed.
+  rendering chunks...
+  computing gzip size...
+  dist/index.html                    0.47 kB │ gzip:   0.31 kB
+  dist/assets/index-xxx.css         20.82 kB │ gzip:   4.81 kB
+  dist/assets/index-xxx.js       2,753.60 kB │ gzip: 843.61 kB
+  ✓ built in 25.5s
+
+Build creates new /dist folder with updated code.
+
+IMPORTANT:
+  - Old /dist is automatically replaced
+  - Nginx serves /dist folder
+  - Changes take effect IMMEDIATELY
+  - NO nginx restart needed!
+
+
+STEP 4.7: VERIFY BUILD
+---------------------
+Check dist folder:
+  ls -lh dist/
+
+Should show:
+  drwxr-xr-x  assets/
+  -rw-r--r--  index.html
+
+Check index.html timestamp:
+  ls -lh dist/index.html
+
+Should show current time (just built)
+
+
+STEP 4.8: TEST IN BROWSER
+-------------------------
+Clear browser cache:
+  - Ctrl + Shift + R (hard refresh)
+  - Or Ctrl + F5
+
+Open: https://smartcafe.gentime.in
+  - Should see updated UI
+  - Test new/changed features
+  - Check browser console for errors
+
+
+STEP 4.9: RELOAD NGINX (OPTIONAL)
+--------------------------------
+Usually not needed, but doesn't hurt:
+  systemctl reload nginx
+
+
+FRONTEND UPDATE COMPLETE! ✓
+
+No backend restart needed!
+Zero downtime (except momentary during build)
+
+================================================================================
+SECTION 5: UPDATING BOTH (FULL UPDATE)
+================================================================================
+
+SCENARIO: Both frontend and backend changed
+Most common in real deployments
+
+FULL UPDATE PROCEDURE:
+---------------------
+Do backend first, then frontend!
+(Frontend might depend on new backend APIs)
+
+
+STEP 5.1: BACKUP DATABASE
+-------------------------
+⚠️ CRITICAL: Always backup before full update!
+
+mongodump --db smartcafe_cinema --gzip --out /root/backups/before_update_$(date +%Y%m%d_%H%M%S)
+
+
+STEP 5.2: PULL CODE (BOTH)
+--------------------------
+cd /root/smartcafee
+
+# Pull entire repository
+git pull origin main
+
+Shows all changed files in both folders
+
+
+STEP 5.3: UPDATE BACKEND
+------------------------
+cd backend
+
+# Install dependencies (if needed)
+npm install --production
+
+# Restart backend
+pm2 restart smartcafe-backend
+
+# Verify
+pm2 logs smartcafe-backend --lines 20
+
+
+STEP 5.4: UPDATE FRONTEND
+-------------------------
+cd ../frontend
+
+# Install dependencies (if needed)
+npm install
+
+# Build
+npm run build
+
+# Verify build succeeded
+ls -lh dist/
+
+
+STEP 5.5: TEST COMPLETE APPLICATION
+-----------------------------------
+1. Backend health:
+     curl http://localhost:5003/api/health
+
+2. Frontend loads:
+     curl -I https://smartcafe.gentime.in
+
+3. Browser test:
+     Open https://smartcafe.gentime.in
+     Login, test features
+
+4. Check logs:
+     pm2 logs smartcafe-backend --lines 50
+
+
+FULL UPDATE COMPLETE! ✓
+
+Total time: 2-5 minutes
+Downtime: ~30 seconds
+
+================================================================================
+SECTION 6: ZERO-DOWNTIME DEPLOYMENT
+================================================================================
+
+ADVANCED: For production cinema during shows
+
+Use PM2 reload instead of restart:
+  pm2 reload smartcafe-backend
+
+Difference:
+  restart: Stops all, then starts new (2-3 sec downtime)
+  reload: Rolling restart, one at a time (0 sec downtime)
+
+How reload works:
+  1. Start new instance #1
+  2. Wait until ready
+  3. Stop old instance #1
+  4. Start new instance #2
+  5. Wait until ready
+  6. Stop old instance #2
+
+Requests never fail!
+
+
+USING RELOAD:
+------------
+cd /root/smartcafee/backend
+git pull origin main
+npm install --production
+pm2 reload smartcafe-backend --update-env
+
+--update-env: Reloads environment variables
+
+
+PM2 GRACEFUL SHUTDOWN:
+---------------------
+In server.js, handle shutdown:
+
+process.on('SIGINT', () => {
+  console.log('Graceful shutdown...');
+  server.close(() => {
+    mongoose.connection.close(() => {
+      console.log('Closed MongoDB connection');
+      process.exit(0);
+    });
+  });
+});
+
+This ensures:
+  - Current requests complete
+  - Database connections close
+  - Clean shutdown
+
+================================================================================
+SECTION 7: ROLLBACK PROCEDURES
+================================================================================
+
+WHEN TO ROLLBACK:
+----------------
+Rollback if:
+  ✗ Application crashes after update
+  ✗ Critical bug appears
+  ✗ Performance degrades
+  ✗ Database errors
+  ✗ Features broken
+
+
+QUICK ROLLBACK (BACKEND):
+------------------------
+Find previous commit hash:
+  cd /root/smartcafee/backend
+  git log --oneline -5
+
+Example output:
+  def5678 (HEAD -> main) Fix billing bug
+  abc1234 Add new report
+  xyz9012 Update dependencies
+
+Rollback to abc1234:
+  git checkout abc1234
+
+Or previous commit:
+  git checkout HEAD~1
+
+Restart:
+  pm2 restart smartcafe-backend
+
+Verify:
+  pm2 logs smartcafe-backend
+
+
+QUICK ROLLBACK (FRONTEND):
+-------------------------
+cd /root/smartcafee/frontend
+git checkout HEAD~1  # Previous commit
+npm run build
+
+
+COMPLETE ROLLBACK:
+-----------------
+1. Find last working commit:
+     git log --oneline
+
+2. Rollback repository:
+     git reset --hard abc1234
+
+3. Update backend:
+     cd backend
+     npm install --production
+     pm2 restart smartcafe-backend
+
+4. Update frontend:
+     cd ../frontend
+     npm install
+     npm run build
+
+5. Test
+
+
+DATABASE ROLLBACK:
+-----------------
+If database schema changed and broke:
+
+1. Stop application:
+     pm2 stop smartcafe-backend
+
+2. Restore database:
+     mongorestore --db smartcafe_cinema --drop --gzip /root/backups/before_update_20241216_140000/smartcafe_cinema/
+
+3. Rollback code (above steps)
+
+4. Start application:
+     pm2 start smartcafe-backend
+
+
+RETURN TO LATEST (AFTER FIXING):
+-------------------------------
+When issue is fixed on GitHub:
+
+git pull origin main
+npm install --production
+pm2 restart smartcafe-backend
+
+Or:
+git reset --hard origin/main
+
+================================================================================
+SECTION 8: TESTING UPDATES
+================================================================================
+
+TESTING CHECKLIST:
+-----------------
+After every update, test:
+
+□ Backend Health:
+    curl http://localhost:5003/api/health
+
+□ Frontend Loads:
+    https://smartcafe.gentime.in
+
+□ Login:
+    Admin login works
+    Cashier login works
+
+□ Core Features:
+    Fast Order: Add products, create bill
+    Products: View, search works
+    Stock: Check stock levels
+    Reports: View reports load
+
+□ Database:
+    Data persists
+    No errors in logs
+
+□ Performance:
+    Page loads fast
+    API responds quickly
+    No memory leaks: pm2 monit
+
+
+AUTOMATED TESTING (ADVANCED):
+----------------------------
+Create test script:
+
+nano /root/test-deployment.sh
+
+#!/bin/bash
+
+echo "Testing deployment..."
+
+# Test backend health
+echo "1. Backend health check..."
+HEALTH=$(curl -s http://localhost:5003/api/health | grep -o '"success":true')
+if [ -n "$HEALTH" ]; then
+    echo "   ✓ Backend healthy"
+else
+    echo "   ✗ Backend failed"
+    exit 1
+fi
+
+# Test frontend
+echo "2. Frontend check..."
+FRONTEND=$(curl -s -o /dev/null -w "%{http_code}" https://smartcafe.gentime.in)
+if [ "$FRONTEND" = "200" ]; then
+    echo "   ✓ Frontend accessible"
+else
+    echo "   ✗ Frontend failed (HTTP $FRONTEND)"
+    exit 1
+fi
+
+# Test database
+echo "3. Database check..."
+MONGO=$(mongosh smartcafe_cinema --eval "db.users.countDocuments()" --quiet)
+if [ "$MONGO" -gt 0 ]; then
+    echo "   ✓ Database accessible ($MONGO users)"
+else
+    echo "   ✗ Database failed"
+    exit 1
+fi
+
+echo ""
+echo "✓ All tests passed!"
+
+Run after deployment:
+  chmod +x /root/test-deployment.sh
+  /root/test-deployment.sh
+
+================================================================================
+SECTION 9: COMMON UPDATE SCENARIOS
+================================================================================
+
+SCENARIO 1: FIX URGENT BUG
+-------------------------
+Time critical, cinema is open!
+
+1. Fix bug locally
+2. Test thoroughly
+3. git commit -m "HOTFIX: Critical billing bug"
+4. git push origin main
+5. SSH to server
+6. cd /root/smartcafee
+7. git pull origin main
+8. If backend: pm2 reload smartcafe-backend
+9. If frontend: cd frontend && npm run build
+10. Test immediately
+
+Total time: 5 minutes
+
+
+SCENARIO 2: ADD NEW FEATURE
+--------------------------
+Not urgent, plan properly:
+
+1. Develop feature locally
+2. Test extensively
+3. Commit and push
+4. Schedule update (late night)
+5. Backup database
+6. Deploy following full update procedure
+7. Test thoroughly
+8. Monitor for issues
+
+
+SCENARIO 3: UPDATE DEPENDENCIES
+------------------------------
+package.json changed (security updates):
+
+1. git pull origin main
+2. cd backend
+3. rm -rf node_modules package-lock.json
+4. npm install --production
+5. pm2 restart smartcafe-backend
+6. cd ../frontend
+7. rm -rf node_modules package-lock.json
+8. npm install
+9. npm run build
+10. Test
+
+
+SCENARIO 4: DATABASE MIGRATION
+-----------------------------
+Schema changes needed:
+
+1. Backup database (CRITICAL!)
+2. Create migration script
+3. Test migration on backup
+4. Update code
+5. Push to GitHub
+6. SSH to server
+7. Backup production database
+8. Pull code
+9. Run migration script
+10. Deploy code
+11. Test thoroughly
+
+
+SCENARIO 5: ENVIRONMENT VARIABLE CHANGED
+---------------------------------------
+.env file needs update:
+
+1. SSH to server
+2. cd /root/smartcafee/backend
+3. nano .env
+4. Update value
+5. Save
+6. pm2 restart smartcafe-backend --update-env
+7. Verify: pm2 logs smartcafe-backend
+
+This completes the code update and redeployment guide.
+Continue to 06-TROUBLESHOOTING-PROBLEMS.txt for problem solving.
+
+================================================================================
+END OF UPDATE GUIDE
+================================================================================

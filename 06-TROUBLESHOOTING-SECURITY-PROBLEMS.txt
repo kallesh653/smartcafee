@@ -1,0 +1,1355 @@
+================================================================================
+        COMPLETE TROUBLESHOOTING AND SECURITY GUIDE
+        SOLVE PROBLEMS AND PROTECT AGAINST HACKERS
+================================================================================
+
+VERSION: 2.0.0
+PURPOSE: Comprehensive problem-solving and security hardening
+LAST UPDATED: December 2024
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+PART A: TROUBLESHOOTING
+1. Application Won't Start
+2. Cannot Access Website
+3. Database Connection Errors
+4. Performance Issues (Slow)
+5. Memory and CPU Problems
+6. SSL/HTTPS Errors
+7. Login Problems
+8. PM2 Issues
+9. Nginx Problems
+10. Git and Deployment Issues
+
+PART B: SECURITY AND HACKER PREVENTION
+11. Understanding Threats
+12. SSH Security Hardening
+13. Firewall Configuration (UFW)
+14. Preventing DDoS Attacks
+15. Preventing SQL/NoSQL Injection
+16. Protecting Against XSS
+17. Brute Force Protection
+18. File Upload Security
+19. Monitoring and Detection
+20. Incident Response
+
+================================================================================
+================================================================================
+                            PART A: TROUBLESHOOTING
+================================================================================
+================================================================================
+
+SECTION 1: APPLICATION WON'T START
+================================================================================
+
+PROBLEM 1.1: PM2 SHOWS "ERRORED" STATUS
+--------------------------------------
+Symptom:
+  pm2 list shows:
+  │ 7  │ smartcafe-backend  │ errored   │ 0       │ 0      │ 20   │
+
+Diagnosis:
+  pm2 logs smartcafe-backend --lines 50
+
+Common causes and solutions:
+
+CAUSE 1: Port already in use
+Error in logs:
+  Error: listen EADDRINUSE: address already in use :::5003
+
+Solution:
+  # Find process using port 5003
+  lsof -ti:5003
+
+  # Kill the process
+  kill -9 $(lsof -ti:5003)
+
+  # Restart PM2
+  pm2 restart smartcafe-backend
+
+Prevention:
+  - Use unique ports for each app
+  - Check ports before deploying
+
+
+CAUSE 2: MongoDB not running
+Error in logs:
+  MongoServerError: connect ECONNREFUSED 127.0.0.1:27017
+
+Solution:
+  # Check MongoDB status
+  systemctl status mongod
+
+  # Start MongoDB
+  systemctl start mongod
+
+  # Restart application
+  pm2 restart smartcafe-backend
+
+Prevention:
+  - Enable MongoDB auto-start: systemctl enable mongod
+  - Monitor MongoDB: systemctl status mongod
+
+
+CAUSE 3: Missing .env file
+Error in logs:
+  Error: JWT_SECRET is not defined
+
+Solution:
+  cd /root/smartcafee/backend
+
+  # Check if .env exists
+  ls -la .env
+
+  # If missing, recreate
+  nano .env
+  (Add all required environment variables from guide)
+
+  # Restart
+  pm2 restart smartcafe-backend
+
+
+CAUSE 4: Missing node_modules
+Error in logs:
+  Error: Cannot find module 'express'
+
+Solution:
+  cd /root/smartcafee/backend
+  npm install --production
+  pm2 restart smartcafe-backend
+
+
+CAUSE 5: Wrong file permissions
+Error in logs:
+  EACCES: permission denied
+
+Solution:
+  # Fix ownership
+  chown -R root:root /root/smartcafee
+
+  # Fix permissions
+  chmod -R 755 /root/smartcafee
+
+  # Uploads folder needs write access
+  chmod -R 775 /root/smartcafee/backend/uploads
+
+  pm2 restart smartcafe-backend
+
+
+PROBLEM 1.2: APP STARTS THEN CRASHES IMMEDIATELY
+-----------------------------------------------
+Symptom:
+  pm2 list shows "online" then immediately "errored"
+  Restart count keeps increasing
+
+Diagnosis:
+  pm2 logs smartcafe-backend --err --lines 100
+
+Solution:
+  Check for:
+  - Syntax errors in code
+  - Unhandled promise rejections
+  - Database connection issues
+
+  Fix code, test locally:
+    node server.js
+
+  Then deploy:
+    pm2 restart smartcafe-backend
+
+
+PROBLEM 1.3: FRONTEND BLANK SCREEN
+----------------------------------
+Symptom:
+  Website loads but shows blank white page
+
+Diagnosis:
+  1. Open browser console (F12)
+  2. Look for errors
+
+Common errors:
+
+ERROR 1: API URL wrong
+  Console shows: Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+
+Solution:
+  cd /root/smartcafee/frontend
+  cat .env.production
+
+  Should show:
+    VITE_API_URL=https://smartcafeapi.gentime.in
+
+  If wrong, fix and rebuild:
+    echo "VITE_API_URL=https://smartcafeapi.gentime.in" > .env.production
+    npm run build
+
+
+ERROR 2: Build failed or incomplete
+  Console shows: Failed to load module
+
+Solution:
+  cd /root/smartcafee/frontend
+  rm -rf dist
+  npm run build
+
+  Check for build errors!
+  If build successful, refresh browser: Ctrl+Shift+R
+
+
+ERROR 3: CORS error
+  Console shows: blocked by CORS policy
+
+Solution:
+  Backend .env missing CORS settings or wrong
+
+  Edit backend/server.js:
+    app.use(cors()); should exist
+
+  Check frontend URL in backend CORS config
+  Restart backend: pm2 restart smartcafe-backend
+
+================================================================================
+SECTION 2: CANNOT ACCESS WEBSITE
+================================================================================
+
+PROBLEM 2.1: CONNECTION TIMED OUT
+---------------------------------
+Symptom:
+  Browser shows: "This site can't be reached"
+  curl: Connection timed out
+
+Diagnosis Checklist:
+
+□ 1. Server running?
+     ping 72.61.238.39
+     Should show: 64 bytes from 72.61.238.39...
+
+□ 2. SSH works?
+     ssh root@72.61.238.39
+     If SSH works, server is up
+
+□ 3. Nginx running?
+     systemctl status nginx
+     Should show: Active: active (running)
+
+□ 4. Firewall blocking?
+     ufw status
+     Should show ports 80, 443 ALLOW
+
+□ 5. Domain DNS configured?
+     ping smartcafe.gentime.in
+     Should resolve to 72.61.238.39
+
+
+SOLUTIONS:
+
+If Nginx not running:
+  systemctl start nginx
+  systemctl enable nginx
+
+If firewall blocking:
+  ufw allow 80/tcp
+  ufw allow 443/tcp
+  ufw reload
+
+If DNS not resolving:
+  - Check domain registrar DNS settings
+  - Point A record to 72.61.238.39
+  - Wait 5-10 minutes for propagation
+
+
+PROBLEM 2.2: 502 BAD GATEWAY
+---------------------------
+Symptom:
+  Nginx shows error page: 502 Bad Gateway
+
+Meaning:
+  Nginx is running but can't reach backend
+
+Diagnosis:
+  # Check backend is running
+  pm2 list
+  curl http://localhost:5003/api/health
+
+If backend not running:
+  pm2 start smartcafe-backend
+
+If backend running but 502 persists:
+  # Check Nginx proxy configuration
+  cat /etc/nginx/sites-available/smartcafeapi
+
+  Verify proxy_pass matches backend port:
+    proxy_pass http://localhost:5003;  (or 127.0.0.1:5003)
+
+  Test Nginx config:
+    nginx -t
+
+  Reload Nginx:
+    systemctl reload nginx
+
+
+PROBLEM 2.3: 404 NOT FOUND
+-------------------------
+Symptom:
+  Website shows: 404 Not Found
+  Or specific pages show 404
+
+For frontend (React Router):
+  # Check Nginx try_files directive
+  nano /etc/nginx/sites-available/smartcafe
+
+  Location block should have:
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+  This redirects all routes to index.html (React handles routing)
+
+  Reload Nginx:
+    nginx -t
+    systemctl reload nginx
+
+For API endpoints returning 404:
+  # Backend doesn't have that route
+  Check backend logs:
+    pm2 logs smartcafe-backend
+
+  Verify route exists in backend code:
+    cd /root/smartcafee/backend
+    grep -r "route_name" routes/
+
+
+PROBLEM 2.4: SSL CERTIFICATE ERRORS
+----------------------------------
+Symptom:
+  Browser shows: "Your connection is not private"
+  NET::ERR_CERT_DATE_INVALID
+  NET::ERR_CERT_AUTHORITY_INVALID
+
+Diagnosis:
+  # Check certificate expiry
+  openssl s_client -connect smartcafe.gentime.in:443 -servername smartcafe.gentime.in < /dev/null 2>/dev/null | openssl x509 -noout -dates
+
+  Shows:
+    notBefore=Dec 16 12:00:00 2024 GMT
+    notAfter=Mar 16 12:00:00 2025 GMT
+
+If expired (after date passed):
+  certbot renew --force-renewal
+  systemctl reload nginx
+
+If certificate not trusted:
+  # Usually wrong certificate or incomplete chain
+  certbot certificates
+
+  Check:
+    Certificate Name: smartcafe.gentime.in
+    Domains: smartcafe.gentime.in, smartcafeapi.gentime.in
+
+  If wrong, delete and recreate:
+    certbot delete --cert-name smartcafe.gentime.in
+    certbot --nginx -d smartcafe.gentime.in -d smartcafeapi.gentime.in
+
+================================================================================
+SECTION 3: DATABASE CONNECTION ERRORS
+================================================================================
+
+PROBLEM 3.1: MONGODB CONNECTION REFUSED
+--------------------------------------
+Error:
+  MongoServerError: connect ECONNREFUSED 127.0.0.1:27017
+
+Diagnosis:
+  systemctl status mongod
+
+If not running:
+  systemctl start mongod
+  systemctl enable mongod
+
+If still fails:
+  # Check MongoDB logs
+  tail -f /var/log/mongodb/mongod.log
+
+  Common issues:
+  - Permission errors
+  - Disk space full
+  - Configuration errors
+
+
+PROBLEM 3.2: MONGODB AUTHENTICATION FAILED
+-----------------------------------------
+Error:
+  MongoServerError: Authentication failed
+
+Cause:
+  .env has wrong credentials or MongoDB auth enabled but credentials missing
+
+Solution:
+  Check .env:
+    cat /root/smartcafee/backend/.env
+
+  MONGODB_URI format:
+    mongodb://username:password@localhost:27017/smartcafe_cinema
+
+  If auth not needed (local setup):
+    MONGODB_URI=mongodb://localhost:27017/smartcafe_cinema
+
+  Restart app:
+    pm2 restart smartcafe-backend
+
+
+PROBLEM 3.3: DATABASE EMPTY AFTER RESTORE
+----------------------------------------
+Symptom:
+  Login doesn't work
+  No products visible
+  App seems empty
+
+Diagnosis:
+  mongosh smartcafe_cinema --eval "
+    print('Users: ' + db.users.countDocuments());
+    print('Products: ' + db.products.countDocuments());
+    print('Bills: ' + db.bills.countDocuments());
+  "
+
+  If all show 0:
+    Database is empty!
+
+Solution:
+  Restore from backup:
+    mongorestore --db smartcafe_cinema --drop --gzip /root/backups/mongodb/backup_YYYYMMDD_HHMMSS/smartcafe_cinema/
+
+  Or create admin user:
+    mongosh smartcafe_cinema
+    db.users.insertOne({
+      username: "admin",
+      password: "$2a$10$ZZ/7oMKN04tG5ldu0CE2N...",
+      role: "admin",
+      isActive: true
+    })
+
+================================================================================
+SECTION 4: PERFORMANCE ISSUES (SLOW)
+================================================================================
+
+PROBLEM 4.1: WEBSITE LOADS SLOWLY
+--------------------------------
+Symptom:
+  Pages take 10+ seconds to load
+  API calls timeout
+
+Diagnosis Tools:
+  1. Check server load:
+       top
+
+  2. Check memory:
+       free -h
+
+  3. Check disk:
+       df -h
+
+  4. Check network:
+       ping smartcafe.gentime.in
+
+
+COMMON CAUSES:
+
+CAUSE 1: High CPU usage
+  top shows CPU at 100%
+
+  Solution:
+    # Find process consuming CPU
+    top
+
+    # Check if it's Node.js
+    If node process at 100%:
+      - Infinite loop in code
+      - Heavy computation
+      - Memory leak causing GC
+
+    # Restart app
+    pm2 restart smartcafe-backend
+
+    # Check logs for errors
+    pm2 logs smartcafe-backend
+
+
+CAUSE 2: High memory usage
+  free -h shows:
+    Mem: 2G total, 1.9G used, 100M available
+
+  Solution:
+    # Check PM2 memory
+    pm2 monit
+
+    # If backend using >500MB:
+    pm2 restart smartcafe-backend --max-memory-restart 500M
+
+    # This auto-restarts if memory exceeds 500MB
+
+
+CAUSE 3: Disk full
+  df -h shows:
+    /dev/sda1  20G  19G  0  100% /
+
+  Solution:
+    # Find large files
+    du -sh /* | sort -hr | head -10
+
+    # Common culprits:
+    - Old backups: /root/backups/
+    - PM2 logs: /root/.pm2/logs/
+    - MongoDB data: /var/lib/mongodb/
+
+    # Clean up:
+    # Old backups (keep last 7 days)
+    find /root/backups -mtime +7 -delete
+
+    # Rotate PM2 logs
+    pm2 flush  # Clear old logs
+
+
+CAUSE 4: Too many database connections
+  Check MongoDB connections:
+    mongosh --eval "db.serverStatus().connections"
+
+  If current > 100:
+    MongoDB is overloaded
+
+  Solution:
+    # Optimize queries (add indexes)
+    # Increase MongoDB connection pool
+    # Use PM2 cluster mode (already configured)
+
+================================================================================
+SECTION 5: MEMORY AND CPU PROBLEMS
+================================================================================
+
+PROBLEM 5.1: OUT OF MEMORY ERROR
+-------------------------------
+Error in logs:
+  FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory
+
+Cause:
+  Node.js ran out of memory
+
+Solution:
+  # Increase Node.js memory limit
+  pm2 delete smartcafe-backend
+  pm2 start server.js --name smartcafe-backend \
+    -i 2 \
+    --max-memory-restart 500M \
+    --node-args="--max-old-space-size=512"
+
+  Explanation:
+    --max-old-space-size=512 means 512MB max memory per instance
+
+
+PROBLEM 5.2: CPU CONSTANTLY AT 100%
+----------------------------------
+Symptom:
+  top shows node at 100% CPU constantly
+
+Diagnosis:
+  pm2 monit
+
+  Check:
+  - CPU usage per instance
+  - Restart count
+
+  If restart count high:
+    App is crashing and restarting in loop
+
+Solutions:
+  1. Check for infinite loops in code
+  2. Check database query performance
+  3. Add indexes to frequently queried fields
+  4. Optimize slow API endpoints
+
+  Database indexes:
+    mongosh smartcafe_cinema --eval "
+      db.products.createIndex({ serialNo: 1 });
+      db.bills.createIndex({ billDate: -1 });
+      db.orders.createIndex({ status: 1 });
+    "
+
+================================================================================
+================================================================================
+                          PART B: SECURITY AND HACKER PREVENTION
+================================================================================
+================================================================================
+
+SECTION 11: UNDERSTANDING THREATS
+================================================================================
+
+TYPES OF ATTACKS ON YOUR CINEMA APP:
+
+1. BRUTE FORCE LOGIN
+   - Attacker tries thousands of password combinations
+   - Target: /api/auth/login
+   - Goal: Gain admin access
+
+2. DDoS (Distributed Denial of Service)
+   - Overwhelm server with requests
+   - Makes website unavailable
+   - Can happen during peak hours
+
+3. SQL INJECTION (NoSQL Injection for MongoDB)
+   - Inject malicious database queries
+   - Steal or modify data
+   - Example: ' OR 1=1 --
+
+4. XSS (Cross-Site Scripting)
+   - Inject malicious JavaScript
+   - Steal user cookies/sessions
+   - Redirect users to phishing sites
+
+5. DIRECTORY TRAVERSAL
+   - Access files outside intended directory
+   - Example: ../../etc/passwd
+   - Steal sensitive files
+
+6. FILE UPLOAD EXPLOITS
+   - Upload malicious files (PHP shell, etc.)
+   - Execute on server
+   - Take control of server
+
+7. SESSION HIJACKING
+   - Steal user session tokens
+   - Impersonate users
+   - Unauthorized access
+
+8. MAN-IN-THE-MIDDLE (MITM)
+   - Intercept traffic between user and server
+   - Steal credentials and data
+   - Prevented by HTTPS
+
+9. SSH BRUTE FORCE
+   - Try to guess SSH password
+   - Root access if successful
+   - Most common attack!
+
+10. RANSOMWARE
+    - Encrypt all your data
+    - Demand payment to decrypt
+    - Lose everything if not backed up
+
+================================================================================
+SECTION 12: SSH SECURITY HARDENING
+================================================================================
+
+⚠️ CRITICAL: SSH is #1 target for hackers!
+
+DEFAULT STATE (INSECURE):
+- Root login allowed: ✗ BAD
+- Password authentication: ✗ BAD
+- Default port 22: ✗ PREDICTABLE
+
+SECURE STATE (HARDENED):
+- Root login disabled: ✓ GOOD
+- Key-based authentication: ✓ GOOD
+- Custom port: ✓ BETTER
+- Fail2Ban installed: ✓ BEST
+
+
+STEP 12.1: CREATE NON-ROOT USER
+------------------------------
+Why: Don't run everything as root!
+
+Commands:
+  # Create user
+  adduser smartcafe
+
+  # Add to sudo group
+  usermod -aG sudo smartcafe
+
+  # Test
+  su - smartcafe
+  sudo ls /root  # Should work
+
+Use this user for SSH instead of root
+
+
+STEP 12.2: SETUP SSH KEY AUTHENTICATION
+--------------------------------------
+Much more secure than passwords!
+
+On your LOCAL machine (Windows):
+  # Open PowerShell
+  ssh-keygen -t ed25519 -C "your-email@example.com"
+
+  # Save to: C:\Users\YourName\.ssh\id_ed25519
+  # Enter passphrase (optional but recommended)
+
+  # Copy public key to server
+  type C:\Users\YourName\.ssh\id_ed25519.pub | ssh root@72.61.238.39 "cat >> ~/.ssh/authorized_keys"
+
+Now you can login without password:
+  ssh root@72.61.238.39
+
+
+STEP 12.3: DISABLE PASSWORD AUTHENTICATION
+-----------------------------------------
+⚠️ Only after SSH keys work!
+
+Edit SSH config:
+  nano /etc/ssh/sshd_config
+
+Find and change:
+  PasswordAuthentication yes
+  ↓
+  PasswordAuthentication no
+
+  PermitRootLogin yes
+  ↓
+  PermitRootLogin prohibit-password  # Or "no" to fully disable
+
+Restart SSH:
+  systemctl restart sshd
+
+Test from another terminal:
+  ssh root@72.61.238.39
+  Should work with key, fail without
+
+
+STEP 12.4: CHANGE SSH PORT
+-------------------------
+Default port 22 is always attacked!
+
+Edit SSH config:
+  nano /etc/ssh/sshd_config
+
+Find:
+  #Port 22
+
+Change to:
+  Port 2222  # Or any port 1024-65535
+
+Save and restart:
+  systemctl restart sshd
+
+Update firewall:
+  ufw allow 2222/tcp
+  ufw delete allow 22/tcp
+
+Now connect with:
+  ssh -p 2222 root@72.61.238.39
+
+
+STEP 12.5: INSTALL FAIL2BAN
+--------------------------
+Auto-ban IPs after failed login attempts
+
+Install:
+  apt install -y fail2ban
+
+Configure:
+  nano /etc/fail2ban/jail.local
+
+Add:
+  [sshd]
+  enabled = true
+  port = 2222  # Your SSH port
+  logpath = /var/log/auth.log
+  maxretry = 3
+  bantime = 3600  # Ban for 1 hour
+  findtime = 600  # 3 failures in 10 minutes
+
+Start:
+  systemctl start fail2ban
+  systemctl enable fail2ban
+
+Check banned IPs:
+  fail2ban-client status sshd
+
+================================================================================
+SECTION 13: FIREWALL CONFIGURATION (UFW)
+================================================================================
+
+SETUP FIREWALL:
+--------------
+Ubuntu Firewall (UFW) - blocks all except allowed
+
+Enable UFW:
+  ufw --force enable
+
+Allow SSH (FIRST! Or you'll lock yourself out):
+  ufw allow 2222/tcp  # Your SSH port
+
+Allow HTTP and HTTPS:
+  ufw allow 80/tcp
+  ufw allow 443/tcp
+
+Allow backend (only from localhost):
+  # Don't allow! Backend should only be accessed via Nginx
+
+Check status:
+  ufw status numbered
+
+Output:
+  Status: active
+  To                         Action      From
+  --                         ------      ----
+  [ 1] 2222/tcp              ALLOW IN    Anywhere
+  [ 2] 80/tcp                ALLOW IN    Anywhere
+  [ 3] 443/tcp               ALLOW IN    Anywhere
+
+
+ADVANCED FIREWALL RULES:
+-----------------------
+Rate limiting SSH:
+  ufw limit 2222/tcp
+
+Allow specific IP:
+  ufw allow from 49.37.171.193  # Your office IP
+
+Block specific IP:
+  ufw deny from 192.168.1.100
+
+Delete rule:
+  ufw delete 4  # Rule number from ufw status numbered
+
+================================================================================
+SECTION 14: PREVENTING DDoS ATTACKS
+================================================================================
+
+DDoS = Distributed Denial of Service
+Overwhelm server with requests
+
+DEFENSE LAYERS:
+
+LAYER 1: Nginx Rate Limiting (Already configured!)
+  In /etc/nginx/nginx.conf:
+
+    # Limit 10 requests per second per IP
+    limit_req_zone $binary_remote_addr zone=general:10m rate=10r/s;
+    limit_req_zone $binary_remote_addr zone=login:10m rate=5r/m;
+
+  In server blocks:
+    location /api/ {
+      limit_req zone=general burst=20 nodelay;
+    }
+
+    location /api/auth/login {
+      limit_req zone=login burst=3 nodelay;
+    }
+
+Effect:
+  - Normal users: No impact
+  - Attackers: Blocked after exceeding limit
+
+LAYER 2: Cloudflare (Free tier)
+  1. Sign up: cloudflare.com
+  2. Add your domain
+  3. Update nameservers at domain registrar
+  4. Enable "Under Attack" mode during DDoS
+
+Benefits:
+  - Absorbs DDoS attacks
+  - Caching (faster for users)
+  - Free SSL
+  - Analytics
+
+LAYER 3: PM2 Max Memory Restart
+  pm2 restart smartcafe-backend --max-memory-restart 500M
+
+  If memory exceeds 500MB (possible during attack):
+    - Auto-restart
+    - Prevents server crash
+
+LAYER 4: Monitor and Block
+  Watch Nginx access logs:
+    tail -f /var/log/nginx/access.log
+
+  Find attacking IP:
+    awk '{print $1}' /var/log/nginx/access.log | sort | uniq -c | sort -nr | head -10
+
+  Shows top 10 IPs by request count
+
+  Block IP in firewall:
+    ufw deny from 192.168.1.100
+
+================================================================================
+SECTION 15: PREVENTING SQL/NoSQL INJECTION
+================================================================================
+
+WHAT IS NoSQL INJECTION?
+-----------------------
+Attacker injects malicious queries
+
+Example vulnerable code:
+  // DON'T DO THIS!
+  db.users.findOne({ username: req.body.username })
+
+Attack:
+  POST /api/auth/login
+  { "username": { "$gt": "" }, "password": "anything" }
+
+Result: Logs in as first user (admin) without password!
+
+PROTECTION:
+
+1. INPUT VALIDATION (CRITICAL!)
+  In your code, validate ALL inputs:
+
+  const { username, password } = req.body;
+
+  // Validate types
+  if (typeof username !== 'string' || typeof password !== 'string') {
+    return res.status(400).json({ error: 'Invalid input' });
+  }
+
+  // Sanitize
+  const cleanUsername = username.trim().toLowerCase();
+
+2. MONGOOSE SCHEMA VALIDATION
+  User schema already has:
+
+    username: {
+      type: String,  // Only accepts strings
+      required: true
+    }
+
+  This prevents object injection!
+
+3. AVOID DIRECT QUERY BUILDERS
+  Use Mongoose methods instead of raw queries
+
+  ✓ SAFE:
+    User.findOne({ username: cleanUsername })
+
+  ✗ UNSAFE:
+    db.collection('users').findOne({ username: userInput })
+
+4. PARAMETERIZED QUERIES
+  Already done in Mongoose!
+  Variables are escaped automatically
+
+================================================================================
+SECTION 16: PROTECTING AGAINST XSS
+================================================================================
+
+XSS = Cross-Site Scripting
+Inject malicious JavaScript into your website
+
+Example attack:
+  Product name: <script>alert(document.cookie)</script>
+
+When displayed: Executes script, steals cookies!
+
+PROTECTION:
+
+1. OUTPUT ENCODING (React does this!)
+  React automatically escapes JSX:
+
+  <div>{productName}</div>
+
+  Renders as:
+  &lt;script&gt;alert(...)&lt;/script&gt;
+
+  NOT executed!
+
+2. dangerouslySetInnerHTML (AVOID!)
+  Never use unless absolutely necessary:
+
+  // DON'T DO THIS!
+  <div dangerouslySetInnerHTML={{ __html: userInput }} />
+
+3. SANITIZE HTML (If you must allow HTML)
+  Use library:
+
+  import DOMPurify from 'dompurify';
+
+  const cleanHTML = DOMPurify.sanitize(dirtyHTML);
+
+4. CONTENT SECURITY POLICY (CSP)
+  In Nginx:
+
+  add_header Content-Security-Policy "default-src 'self'; script-src 'self'" always;
+
+  Blocks external scripts
+
+5. VALIDATE ON BACKEND
+  Even though frontend validates, backend must too!
+
+  const productName = req.body.name;
+
+  // Remove HTML tags
+  const cleanName = productName.replace(/<[^>]*>/g, '');
+
+  // Or validate format
+  if (!/^[a-zA-Z0-9\s\-]+$/.test(productName)) {
+    return res.status(400).json({ error: 'Invalid product name' });
+  }
+
+================================================================================
+SECTION 17: BRUTE FORCE PROTECTION
+================================================================================
+
+BRUTE FORCE = Trying many passwords
+
+TARGET: /api/auth/login
+
+PROTECTION:
+
+1. RATE LIMITING (Already configured!)
+  Nginx limits to 5 login attempts per minute per IP
+
+2. ACCOUNT LOCKOUT (Add to code)
+  In User model:
+
+  loginAttempts: { type: Number, default: 0 },
+  lockUntil: { type: Date }
+
+  In login controller:
+
+  // Check if locked
+  if (user.lockUntil && user.lockUntil > Date.now()) {
+    return res.status(423).json({
+      error: 'Account locked. Try again in 30 minutes.'
+    });
+  }
+
+  // Increment attempts on wrong password
+  if (!isMatch) {
+    user.loginAttempts += 1;
+
+    // Lock after 5 failed attempts
+    if (user.loginAttempts >= 5) {
+      user.lockUntil = Date.now() + 30 * 60 * 1000; // 30 minutes
+    }
+
+    await user.save();
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+
+  // Reset on successful login
+  user.loginAttempts = 0;
+  user.lockUntil = null;
+
+3. STRONG PASSWORDS
+  Enforce in registration:
+
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+
+  Requires:
+  - 8+ characters
+  - Uppercase letter
+  - Lowercase letter
+  - Number
+  - Special character
+
+4. MONITOR FAILED LOGINS
+  Log failed attempts:
+
+  const fs = require('fs');
+
+  // In login controller
+  if (!isMatch) {
+    fs.appendFileSync('/var/log/smartcafe/failed-logins.log',
+      `${new Date().toISOString()} - ${req.ip} - ${username}\n`
+    );
+  }
+
+  Check log regularly:
+    tail -f /var/log/smartcafe/failed-logins.log
+
+================================================================================
+SECTION 18: FILE UPLOAD SECURITY
+================================================================================
+
+RISK: Users upload malicious files
+
+PROTECTIONS:
+
+1. VALIDATE FILE TYPE
+  In backend upload handler:
+
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+
+  if (!allowedTypes.includes(file.mimetype)) {
+    return res.status(400).json({ error: 'Invalid file type' });
+  }
+
+2. LIMIT FILE SIZE
+  Already in .env:
+    MAX_FILE_SIZE=5242880  # 5MB
+
+  In express:
+    app.use(express.json({ limit: '10mb' }));
+    app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
+3. RENAME FILES
+  Never use original filename:
+
+  const ext = path.extname(file.originalname);
+  const newName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}${ext}`;
+
+  Prevents:
+  - Overwriting existing files
+  - Path traversal attacks
+  - Special characters issues
+
+4. SCAN FOR VIRUSES (Advanced)
+  Install ClamAV:
+
+  apt install clamav clamav-daemon
+
+  Update virus definitions:
+    freshclam
+
+  Scan uploaded file:
+    clamscan /path/to/uploaded/file
+
+5. STORE OUTSIDE WEB ROOT
+  Uploads in: /root/smartcafee/backend/uploads/
+  Served via: /uploads route (Nginx)
+
+  NOT: /var/www/html/uploads/
+  This prevents direct execution
+
+================================================================================
+SECTION 19: MONITORING AND DETECTION
+================================================================================
+
+MONITORING TOOLS:
+
+1. PM2 MONITORING
+  pm2 monit
+
+  Shows real-time:
+  - CPU usage
+  - Memory usage
+  - Logs
+
+2. NGINX ACCESS LOGS
+  tail -f /var/log/nginx/access.log
+
+  Watch for:
+  - Unusual URLs
+  - High request rates
+  - Failed requests (404, 403)
+
+3. NGINX ERROR LOGS
+  tail -f /var/log/nginx/error.log
+
+  Shows:
+  - Errors
+  - Failed proxying
+  - SSL errors
+
+4. SYSTEM RESOURCES
+  htop
+
+  Interactive view:
+  - CPU per core
+  - Memory usage
+  - Process list
+
+5. DISK SPACE
+  df -h
+
+  Watch for disk filling up
+
+6. MONGODB LOGS
+  tail -f /var/log/mongodb/mongod.log
+
+  Watch for:
+  - Slow queries
+  - Connection errors
+  - Authentication failures
+
+
+AUTOMATED MONITORING (ADVANCED):
+
+Install monitoring script:
+
+nano /root/monitor.sh
+
+#!/bin/bash
+
+# Check if services are running
+services=("nginx" "mongod")
+for service in "${services[@]}"; do
+    if ! systemctl is-active --quiet $service; then
+        echo "ALERT: $service is down!" | mail -s "Service Alert" your-email@example.com
+        systemctl start $service
+    fi
+done
+
+# Check disk space
+usage=$(df -h / | awk 'NR==2 {print $5}' | sed 's/%//')
+if [ $usage -gt 80 ]; then
+    echo "ALERT: Disk usage at ${usage}%" | mail -s "Disk Alert" your-email@example.com
+fi
+
+# Check PM2 apps
+if ! pm2 list | grep -q "online"; then
+    echo "ALERT: PM2 apps not running!" | mail -s "PM2 Alert" your-email@example.com
+fi
+
+Schedule:
+  chmod +x /root/monitor.sh
+  crontab -e
+
+  # Run every 5 minutes
+  */5 * * * * /root/monitor.sh
+
+================================================================================
+SECTION 20: INCIDENT RESPONSE
+================================================================================
+
+IF YOU SUSPECT A HACK:
+
+IMMEDIATE ACTIONS (DO NOW!):
+
+1. ISOLATE SERVER
+     ufw default deny incoming
+     ufw default deny outgoing
+
+   This blocks all traffic except existing connections
+
+2. CHECK ACTIVE CONNECTIONS
+     netstat -tupn | grep ESTABLISHED
+
+   Look for suspicious IPs
+
+3. CHECK RECENT LOGINS
+     last -a | head -20
+
+   Shows who logged in recently
+
+4. CHECK RUNNING PROCESSES
+     ps aux
+
+   Look for unknown processes
+
+5. BACKUP EVERYTHING
+     mongodump --db smartcafe_cinema --out /root/backup_incident_$(date +%Y%m%d_%H%M%S)
+
+6. CHANGE ALL PASSWORDS
+     - SSH passwords
+     - Database passwords
+     - Admin passwords
+     - JWT_SECRET
+
+7. REVIEW LOGS
+     # Failed login attempts
+     grep "Failed password" /var/log/auth.log
+
+     # Nginx access
+     tail -n 1000 /var/log/nginx/access.log | grep -v "GET /api/health"
+
+     # Look for:
+     - SQL injection attempts: ' OR 1=1
+     - Path traversal: ../../../
+     - Unusual user agents
+     - High request rates from single IP
+
+
+RECOVERY STEPS:
+
+1. IDENTIFY BREACH SOURCE
+   - Compromised password?
+   - Vulnerable code?
+   - Outdated software?
+
+2. FIX VULNERABILITY
+   - Patch code
+   - Update software
+   - Change passwords
+   - Review security settings
+
+3. RESTORE IF NEEDED
+   - Restore database from backup
+   - Redeploy code
+   - Verify integrity
+
+4. STRENGTHEN SECURITY
+   - Enable all security measures in this guide
+   - Add more monitoring
+   - Regular security audits
+
+
+PREVENTION (DO NOW!):
+
+✓ Regular backups (daily)
+✓ Strong passwords
+✓ SSH key authentication
+✓ Firewall enabled
+✓ Fail2ban installed
+✓ SSL/HTTPS enabled
+✓ Rate limiting configured
+✓ Input validation in code
+✓ Regular updates
+✓ Monitoring active
+
+================================================================================
+SECURITY CHECKLIST
+================================================================================
+
+□ SSH hardened (key auth, custom port, fail2ban)
+□ Firewall enabled (ufw)
+□ SSL/HTTPS configured
+□ Strong passwords (>12 chars, mixed case, symbols)
+□ JWT_SECRET changed from default
+□ Nginx rate limiting enabled
+□ Input validation in all forms
+□ File upload restrictions
+□ Regular backups (automated daily)
+□ Monitoring in place
+□ Logs reviewed weekly
+□ Updates applied monthly
+□ Non-root user for operations
+□ Database authentication enabled
+□ Unnecessary ports closed
+□ Error messages don't reveal system info
+□ Dependencies updated regularly
+□ Code reviewed for security issues
+□ Testing environment separate from production
+□ Disaster recovery plan documented
+
+================================================================================
+EMERGENCY CONTACTS
+================================================================================
+
+Server Issues:
+  - VPS Provider Support: [Your provider's support]
+  - Domain Registrar: [Your registrar's support]
+
+Security:
+  - CERT (Computer Emergency Response Team): cert.org
+
+Resources:
+  - OWASP Top 10: owasp.org/www-project-top-ten/
+  - Ubuntu Security: ubuntu.com/security
+  - MongoDB Security: docs.mongodb.com/manual/security/
+
+================================================================================
+END OF TROUBLESHOOTING AND SECURITY GUIDE
+================================================================================
+
+You now have complete knowledge to:
+  ✓ Deploy Smart Cafe application
+  ✓ Configure Nginx with advanced optimizations
+  ✓ Setup SSL/HTTPS with auto-renewal
+  ✓ Backup and restore MongoDB
+  ✓ Update code and redeploy
+  ✓ Troubleshoot common problems
+  ✓ Protect against hackers
+  ✓ Monitor and maintain server
+  ✓ Respond to security incidents
+
+Keep these guides for reference!
+Update them as you learn more!
+
+REMEMBER:
+  - Backup before every major change
+  - Test in development first
+  - Monitor logs regularly
+  - Update software monthly
+  - Review security weekly
+
+Your cinema billing system is now production-ready! 🎉
