@@ -636,7 +636,7 @@ const FastOrderCashier = () => {
                 height: 48,
                 fontSize: 16,
                 fontWeight: 700,
-                background: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)',
+                background: 'linear-gradient(135deg, #389e0d 0%, #52c41a 100%)',
                 border: 'none'
               }}
             >
