@@ -1,0 +1,310 @@
+/* Mobile Responsive Styles for Smart Cafe */
+
+/* General Mobile Optimizations */
+@media (max-width: 768px) {
+  /* Typography */
+  h1 {
+    font-size: 20px !important;
+  }
+
+  h2 {
+    font-size: 18px !important;
+  }
+
+  h3 {
+    font-size: 16px !important;
+  }
+
+  /* Cards */
+  .ant-card {
+    border-radius: 8px;
+  }
+
+  .ant-card-head {
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+
+  .ant-card-body {
+    padding: 16px;
+  }
+
+  /* Tables */
+  .ant-table {
+    font-size: 12px;
+  }
+
+  .ant-table-thead > tr > th {
+    padding: 8px;
+    font-size: 12px;
+  }
+
+  .ant-table-tbody > tr > td {
+    padding: 8px;
+    font-size: 12px;
+  }
+
+  /* Forms */
+  .ant-form-item {
+    margin-bottom: 16px;
+  }
+
+  .ant-form-item-label > label {
+    font-size: 13px;
+  }
+
+  .ant-input,
+  .ant-input-number,
+  .ant-select-selector {
+    font-size: 14px;
+  }
+
+  /* Buttons */
+  .ant-btn {
+    font-size: 13px;
+  }
+
+  .ant-btn-lg {
+    font-size: 14px;
+    height: 44px;
+  }
+
+  /* Modals */
+  .ant-modal {
+    max-width: calc(100vw - 32px);
+    margin: 16px auto;
+  }
+
+  .ant-modal-header {
+    padding: 12px 16px;
+  }
+
+  .ant-modal-body {
+    padding: 16px;
+  }
+
+  .ant-modal-footer {
+    padding: 12px 16px;
+  }
+
+  /* Statistics Cards */
+  .ant-statistic-title {
+    font-size: 12px;
+  }
+
+  .ant-statistic-content {
+    font-size: 20px;
+  }
+
+  /* Drawers */
+  .ant-drawer-body {
+    padding: 16px;
+  }
+
+  /* Tags */
+  .ant-tag {
+    font-size: 11px;
+    padding: 2px 8px;
+  }
+
+  /* Spacing */
+  .ant-space-item {
+    margin-right: 8px !important;
+  }
+
+  /* Gradient Cards */
+  .stat-card {
+    border-radius: 12px;
+    border: none;
+  }
+
+  .gradient-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+
+  .gradient-success {
+    background: linear-gradient(135deg, #52c41a 0%, #73d13d 100%);
+  }
+
+  .gradient-warning {
+    background: linear-gradient(135deg, #faad14 0%, #ffd666 100%);
+  }
+
+  .gradient-danger {
+    background: linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%);
+  }
+
+  /* Dashboard Cards */
+  .dashboard-card {
+    margin-bottom: 16px;
+  }
+
+  .dashboard-card .ant-card-body {
+    padding: 16px;
+  }
+
+  /* Hide desktop-only elements */
+  .desktop-only {
+    display: none !important;
+  }
+
+  /* Show mobile-only elements */
+  .mobile-only {
+    display: block !important;
+  }
+
+  /* Responsive Gutters */
+  .ant-row {
+    margin-left: -8px !important;
+    margin-right: -8px !important;
+  }
+
+  .ant-col {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  /* Tabs */
+  .ant-tabs-nav {
+    margin-bottom: 16px;
+  }
+
+  .ant-tabs-tab {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  /* Scrollable Tables */
+  .ant-table-wrapper {
+    overflow-x: auto;
+  }
+
+  /* Date Picker */
+  .ant-picker {
+    width: 100% !important;
+  }
+
+  /* Select */
+  .ant-select {
+    font-size: 13px;
+  }
+
+  /* Dropdown */
+  .ant-dropdown {
+    max-width: calc(100vw - 32px);
+  }
+}
+
+/* Tablet Optimizations */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .ant-card-body {
+    padding: 20px;
+  }
+
+  .ant-statistic-content {
+    font-size: 24px;
+  }
+}
+
+/* Desktop */
+@media (min-width: 1025px) {
+  .mobile-only {
+    display: none !important;
+  }
+
+  .desktop-only {
+    display: block !important;
+  }
+}
+
+/* Landscape Mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+  .ant-modal {
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+  }
+}
+
+/* Small Mobile Devices */
+@media (max-width: 480px) {
+  h1 {
+    font-size: 18px !important;
+  }
+
+  .ant-btn-lg {
+    height: 40px;
+    font-size: 13px;
+  }
+
+  .ant-statistic-content {
+    font-size: 18px;
+  }
+
+  .ant-card-head {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .ant-card-body {
+    padding: 12px;
+  }
+}
+
+/* Fix for horizontal scrolling */
+body {
+  overflow-x: hidden;
+}
+
+#root {
+  overflow-x: hidden;
+}
+
+/* Purchase & Ready Items Mobile Optimizations */
+@media (max-width: 768px) {
+  .ready-items-grid .ant-col {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+
+  .purchase-summary-card {
+    position: relative !important;
+    top: 0 !important;
+    margin-top: 16px;
+  }
+
+  .purchase-table .ant-table-thead > tr > th {
+    white-space: nowrap;
+  }
+
+  .purchase-table .ant-table-tbody > tr > td {
+    white-space: nowrap;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .ant-layout-sider,
+  .ant-layout-header,
+  .no-print {
+    display: none !important;
+  }
+
+  .ant-layout-content {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Dark Mode Support (Future Enhancement) */
+@media (prefers-color-scheme: dark) {
+  /* Can be implemented later */
+}
