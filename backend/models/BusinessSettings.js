@@ -6,6 +6,10 @@ const businessSettingsSchema = new mongoose.Schema({
     required: true,
     default: 'Juicy'
   },
+  shopTagline: {
+    type: String,
+    default: 'Delicious treats just a tap away'
+  },
   shopAddress: {
     type: String,
     default: ''
@@ -78,6 +82,41 @@ const businessSettingsSchema = new mongoose.Schema({
       default: 10
     }
   },
+  menuSlides: [{
+    type: {
+      type: String,
+      enum: ['image', 'video', 'text'],
+      default: 'image'
+    },
+    title: {
+      type: String,
+      default: ''
+    },
+    subtitle: {
+      type: String,
+      default: ''
+    },
+    description: {
+      type: String,
+      default: ''
+    },
+    imageUrl: {
+      type: String,
+      default: ''
+    },
+    videoUrl: {
+      type: String,
+      default: ''
+    },
+    bgColor: {
+      type: String,
+      default: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+    },
+    icon: {
+      type: String,
+      default: ''
+    }
+  }],
   updatedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'

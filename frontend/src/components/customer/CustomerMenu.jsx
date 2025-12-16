@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import {
-  Button, message, Modal, Badge, Space, Spin, Empty, Row, Col, Card
+  Button, message, Modal, Badge, Space, Spin, Empty, Row, Col, Card, Carousel, Tag, Divider
 } from 'antd';
 import {
-  ShoppingCartOutlined, CheckOutlined, MinusOutlined, PlusOutlined
+  ShoppingCartOutlined, CheckOutlined, MinusOutlined, PlusOutlined,
+  CloseCircleOutlined, FireOutlined, StarOutlined, ThunderboltOutlined
 } from '@ant-design/icons';
 import api from '../../services/api';
 import moment from 'moment';
+import './CustomerMenu.css';
 
 const CustomerMenu = () => {
   const [products, setProducts] = useState([]);
@@ -17,12 +19,13 @@ const CustomerMenu = () => {
   const [processing, setProcessing] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(null);
-
-  
+  const [sliderData, setSliderData] = useState([]);
+  const [settings, setSettings] = useState(null);
 
   useEffect(() => {
     fetchProducts();
     fetchCategories();
+    fetchSettings();
   }, []);
 
   const fetchProducts = async () => {
@@ -43,6 +46,36 @@ const CustomerMenu = () => {
       setCategories(['All', ...data.categories]);
     } catch (error) {
       console.error('Failed to load categories');
+    }
+  };
+
+  const fetchSettings = async () => {
+    try {
+      const { data } = await api.get('/settings');
+      setSettings(data.settings);
+      if (data.settings?.menuSlides && data.settings.menuSlides.length > 0) {
+        setSliderData(data.settings.menuSlides);
+      } else {
+        // Default slides if none configured
+        setSliderData([
+          {
+            type: 'image',
+            title: 'Welcome to Smart Cafe',
+            subtitle: 'Order from your seat!',
+            bgColor: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+          }
+        ]);
+      }
+    } catch (error) {
+      console.error('Failed to load settings');
+      setSliderData([
+        {
+          type: 'image',
+          title: 'Welcome to Smart Cafe',
+          subtitle: 'Order from your seat!',
+          bgColor: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+        }
+      ]);
     }
   };
 
@@ -115,272 +148,338 @@ const CustomerMenu = () => {
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(180deg, #667eea 0%, #764ba2 50%, #f5f7fa 50%)',
-      paddingBottom: 100
-    }}>
-      {/* Header */}
-      <div style={{
-        padding: '20px 16px',
-        textAlign: 'center',
-        color: '#fff'
-      }}>
-        <h1 style={{ color: '#fff', fontSize: 28, marginBottom: 8 }}>
-          ☕ Smart Cafe Menu
-        </h1>
-        <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: 14, margin: 0 }}>
-          Order from your seat!
-        </p>
+    <div className="customer-menu-container">
+      {/* Beautiful Top Slider */}
+      <div className="menu-slider-wrapper">
+        <Carousel autoplay autoplaySpeed={4000} effect="fade" dots={{ className: 'slider-dots' }}>
+          {sliderData.map((slide, index) => (
+            <div key={index}>
+              <div
+                className="slider-slide"
+                style={{
+                  background: slide.bgColor || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  backgroundImage: slide.imageUrl ? `url(${slide.imageUrl})` : 'none',
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center'
+                }}
+              >
+                {/* Overlay for better text visibility */}
+                <div className="slider-overlay" />
+
+                {/* Video Background if provided */}
+                {slide.type === 'video' && slide.videoUrl && (
+                  <video
+                    className="slider-video"
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    src={slide.videoUrl}
+                  />
+                )}
+
+                {/* Content */}
+                <div className="slider-content">
+                  {slide.title && (
+                    <h1 className="slider-title">
+                      {slide.icon && <span>{slide.icon} </span>}
+                      {slide.title}
+                    </h1>
+                  )}
+                  {slide.subtitle && (
+                    <p className="slider-subtitle">{slide.subtitle}</p>
+                  )}
+                  {slide.description && (
+                    <p className="slider-description">{slide.description}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </Carousel>
+      </div>
+
+      {/* Shop Name */}
+      <div className="shop-header">
+        <h2>☕ {settings?.shopName || 'Smart Cafe'}</h2>
+        <p>{settings?.shopTagline || 'Delicious treats just a tap away'}</p>
       </div>
 
       <div style={{ padding: '0 16px' }}>
-        {/* Category Filter */}
-        <div style={{
-          overflowX: 'auto',
-          whiteSpace: 'nowrap',
-          marginBottom: 20,
-          paddingBottom: 8
-        }}>
-          <Space size="small">
+        {/* Category Filter - Modern Pills */}
+        <div className="category-filter-wrapper">
+          <Space size={[8, 8]} wrap>
             {categories.map(cat => (
               <Button
                 key={cat}
                 type={selectedCategory === cat ? 'primary' : 'default'}
                 onClick={() => setSelectedCategory(cat)}
+                className={`category-pill ${selectedCategory === cat ? 'active' : ''}`}
                 size="large"
-                style={{
-                  minWidth: 80,
-                  fontWeight: 600,
-                  borderRadius: 20,
-                  background: selectedCategory === cat ? '#fff' : 'rgba(255,255,255,0.9)',
-                  color: selectedCategory === cat ? '#667eea' : '#262626',
-                  border: 'none'
-                }}
               >
                 {cat}
+                {selectedCategory === cat && <Badge count={filteredProducts.length} style={{ marginLeft: 8 }} />}
               </Button>
             ))}
           </Space>
         </div>
 
-        {/* Products */}
+        {/* Products - Professional Grid */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: 60 }}>
-            <Spin size="large" />
+            <Spin size="large" tip="Loading delicious items..." />
           </div>
         ) : filteredProducts.length === 0 ? (
-          <Empty description="No items available" />
+          <Empty
+            description="No items available in this category"
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            style={{ margin: '60px 0' }}
+          />
         ) : (
-          <div className="product-grid">
+          <Row gutter={[12, 12]} style={{ marginTop: 16, marginBottom: 120 }}>
             {filteredProducts.map(product => {
               const inCart = cart[product._id];
               const quantity = inCart?.quantity || 0;
+              const isLowStock = product.currentStock <= 10 && product.currentStock > 0;
 
               return (
-                <Card
-                  key={product._id}
-                  hoverable
-                  style={{
-                    borderRadius: 12,
-                    overflow: 'hidden',
-                    border: inCart ? '3px solid #52c41a' : '2px solid #e8e8e8'
-                  }}
-                  bodyStyle={{ padding: 12 }}
-                  cover={
-                    product.imageUrl ? (
-                      <img
-                        alt={product.name}
-                        src={product.imageUrl.startsWith('http')
-                          ? product.imageUrl
-                          : `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${product.imageUrl}`}
-                        style={{ height: 120, objectFit: 'cover' }}
-                        onError={(e) => {
-                          e.target.style.display = 'none';
-                          e.target.parentElement.innerHTML = '<div style="height:120px;background:#f5f7fa;display:flex;align-items:center;justify-content:center;font-size:50px">☕</div>';
-                        }}
-                      />
-                    ) : (
-                      <div style={{
-                        height: 120,
-                        background: '#f5f7fa',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 50
-                      }}>
-                        ☕
-                      </div>
-                    )
-                  }
-                >
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 14 }}>
-                      {product.name}
-                    </div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: '#667eea', marginBottom: 8 }}>
-                      ₹{product.price}
-                    </div>
+                <Col xs={12} sm={8} md={6} lg={4} key={product._id}>
+                  <Card
+                    hoverable
+                    className={`product-card-modern ${inCart ? 'in-cart' : ''}`}
+                    cover={
+                      <div className="product-image-wrapper">
+                        {product.imageUrl ? (
+                          <img
+                            alt={product.name}
+                            src={product.imageUrl.startsWith('http')
+                              ? product.imageUrl
+                              : `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${product.imageUrl}`}
+                            className="product-image"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.parentElement.querySelector('.product-placeholder').style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <div className="product-placeholder" style={{ display: product.imageUrl ? 'none' : 'flex' }}>
+                          ☕
+                        </div>
 
-                    {quantity > 0 ? (
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                        <Button
-                          danger
-                          shape="circle"
-                          icon={<MinusOutlined />}
-                          onClick={() => updateCart(product, -1)}
-                        />
-                        <span style={{ fontSize: 18, fontWeight: 700, minWidth: 25, textAlign: 'center' }}>
-                          {quantity}
-                        </span>
-                        <Button
-                          type="primary"
-                          shape="circle"
-                          icon={<PlusOutlined />}
-                          onClick={() => updateCart(product, 1)}
-                        />
+                        {/* Badges */}
+                        <div className="product-badges">
+                          {product.isPopular && (
+                            <Tag icon={<FireOutlined />} color="red" className="badge-popular">
+                              Popular
+                            </Tag>
+                          )}
+                          {isLowStock && (
+                            <Tag icon={<ThunderboltOutlined />} color="orange" className="badge-limited">
+                              Limited
+                            </Tag>
+                          )}
+                          {product.currentStock <= 0 && (
+                            <Tag color="default" className="badge-out">
+                              Sold Out
+                            </Tag>
+                          )}
+                        </div>
+
+                        {/* Serial Number */}
+                        {product.serialNo && (
+                          <div className="product-serial">
+                            #{product.serialNo}
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <Button
-                        type="primary"
-                        block
-                        onClick={() => updateCart(product, 1)}
-                        disabled={product.currentStock <= 0}
-                      >
-                        {product.currentStock <= 0 ? 'Out of Stock' : 'Add to Cart'}
-                      </Button>
-                    )}
-                  </div>
-                </Card>
+                    }
+                    bodyStyle={{ padding: 12 }}
+                  >
+                    <div className="product-info">
+                      <div className="product-name">{product.name}</div>
+                      {product.description && (
+                        <div className="product-description">{product.description}</div>
+                      )}
+                      <div className="product-price">₹{product.price}</div>
+
+                      {/* Add to Cart Controls */}
+                      <div className="product-actions">
+                        {quantity > 0 ? (
+                          <div className="quantity-controls">
+                            <Button
+                              danger
+                              shape="circle"
+                              size="small"
+                              icon={<MinusOutlined />}
+                              onClick={() => updateCart(product, -1)}
+                              className="qty-btn"
+                            />
+                            <span className="quantity-display">{quantity}</span>
+                            <Button
+                              type="primary"
+                              shape="circle"
+                              size="small"
+                              icon={<PlusOutlined />}
+                              onClick={() => updateCart(product, 1)}
+                              className="qty-btn"
+                              disabled={quantity >= product.currentStock}
+                            />
+                          </div>
+                        ) : (
+                          <Button
+                            type="primary"
+                            block
+                            size="small"
+                            onClick={() => updateCart(product, 1)}
+                            disabled={product.currentStock <= 0}
+                            className="add-to-cart-btn"
+                            icon={<PlusOutlined />}
+                          >
+                            Add
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                </Col>
               );
             })}
-          </div>
+          </Row>
         )}
       </div>
 
-      {/* Floating Cart Button */}
+      {/* Floating Cart Button - Modern Design */}
       {cartCount > 0 && (
-        <div style={{
-          position: 'fixed',
-          bottom: 16,
-          left: 16,
-          right: 16,
-          zIndex: 1000
-        }}>
+        <div className="floating-cart-container">
           <Button
             type="primary"
             size="large"
             block
-            icon={<ShoppingCartOutlined />}
             onClick={proceedToCheckout}
-            style={{
-              height: 60,
-              fontSize: 18,
-              fontWeight: 700,
-              background: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)',
-              border: 'none',
-              borderRadius: 12,
-              boxShadow: '0 4px 20px rgba(82, 196, 26, 0.5)'
-            }}
+            className="floating-cart-btn"
           >
-            View Cart ({cartCount}) - ₹{cartTotal}
+            <div className="cart-btn-content">
+              <div className="cart-btn-left">
+                <ShoppingCartOutlined className="cart-icon" />
+                <Badge count={cartCount} className="cart-badge" />
+                <span className="cart-text">View Cart</span>
+              </div>
+              <div className="cart-btn-right">
+                <span className="cart-total">₹{cartTotal}</span>
+              </div>
+            </div>
           </Button>
         </div>
       )}
 
-      {/* Checkout Modal */}
+      {/* Checkout Modal - Professional */}
       <Modal
-        title="Complete Your Order"
+        title={
+          <div className="checkout-modal-header">
+            <ShoppingCartOutlined /> Complete Your Order
+          </div>
+        }
         open={showCheckout}
         onCancel={() => setShowCheckout(false)}
         footer={null}
-        width={400}
+        width={450}
+        className="checkout-modal"
       >
-        <div style={{ padding: '20px 0' }}>
-          <div style={{ marginBottom: 20 }}>
-            <h3 style={{ marginBottom: 12 }}>Your Order</h3>
+        <div className="checkout-content">
+          <div className="order-items">
             {cartItems.map(item => (
-              <div key={item._id} style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                padding: '8px 0',
-                borderBottom: '1px solid #f0f0f0'
-              }}>
-                <div>
-                  <div style={{ fontWeight: 600 }}>{item.name}</div>
-                  <div style={{ color: '#999', fontSize: 13 }}>
+              <div key={item._id} className="order-item">
+                <div className="item-left">
+                  <div className="item-name">{item.name}</div>
+                  <div className="item-qty-price">
                     {item.quantity} × ₹{item.price}
                   </div>
                 </div>
-                <div style={{ fontWeight: 700 }}>₹{item.itemTotal}</div>
+                <div className="item-right">
+                  <div className="item-total">₹{item.itemTotal}</div>
+                  <Button
+                    type="text"
+                    danger
+                    size="small"
+                    icon={<CloseCircleOutlined />}
+                    onClick={() => updateCart(item, -item.quantity)}
+                  />
+                </div>
               </div>
             ))}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              paddingTop: 12,
-              marginTop: 12,
-              borderTop: '2px solid #000',
-              fontSize: 18,
-              fontWeight: 700
-            }}>
-              <span>Total:</span>
-              <span style={{ color: '#52c41a' }}>₹{cartTotal}</span>
+          </div>
+
+          <Divider />
+
+          <div className="order-summary">
+            <div className="summary-row">
+              <span>Subtotal</span>
+              <span>₹{cartTotal}</span>
+            </div>
+            <div className="summary-row total">
+              <span>Total</span>
+              <span className="total-amount">₹{cartTotal}</span>
             </div>
           </div>
 
-          <Space direction="vertical" style={{ width: '100%' }} size="large">
+          <Button
+            type="primary"
+            size="large"
+            block
+            icon={<CheckOutlined />}
+            onClick={placeOrder}
+            loading={processing}
+            className="place-order-btn"
+          >
+            Place Order
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Success Modal - Celebration */}
+      <Modal
+        open={!!orderSuccess}
+        onCancel={() => setOrderSuccess(null)}
+        footer={null}
+        width={400}
+        className="success-modal"
+        centered
+      >
+        {orderSuccess && (
+          <div className="success-content">
+            <div className="success-icon">
+              <div className="checkmark-circle">
+                <CheckOutlined />
+              </div>
+            </div>
+            <h2 className="success-title">Order Placed Successfully!</h2>
+            <div className="order-number">
+              <Tag icon={<StarOutlined />} color="success" style={{ fontSize: 16, padding: '8px 16px' }}>
+                Order #{orderSuccess.orderNo}
+              </Tag>
+            </div>
+            <p className="success-message">
+              Your order will be prepared shortly. Thank you!
+            </p>
+            <div className="order-details-box">
+              <div className="order-detail-row">
+                <span>Total Amount</span>
+                <span className="amount">₹{orderSuccess.totalAmount.toFixed(2)}</span>
+              </div>
+              <div className="order-detail-row">
+                <span>Order Time</span>
+                <span>{moment(orderSuccess.orderDate).format('hh:mm A')}</span>
+              </div>
+            </div>
             <Button
               type="primary"
               size="large"
               block
-              icon={<CheckOutlined />}
-              onClick={placeOrder}
-              loading={processing}
-              style={{
-                height: 56,
-                fontSize: 18,
-                fontWeight: 700,
-                background: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)',
-                border: 'none'
-              }}
+              onClick={() => setOrderSuccess(null)}
+              className="done-btn"
             >
-              Place Order
+              Done
             </Button>
-          </Space>
-        </div>
-      </Modal>
-
-      {/* Success Modal */}
-      <Modal
-        title={null}
-        open={!!orderSuccess}
-        onCancel={() => setOrderSuccess(null)}
-        footer={[
-          <Button key="close" size="large" type="primary" onClick={() => setOrderSuccess(null)} block>
-            Done
-          </Button>
-        ]}
-        width={400}
-      >
-        {orderSuccess && (
-          <div style={{ textAlign: 'center', padding: '20px 0' }}>
-            <div style={{ fontSize: 64, marginBottom: 16 }}>✅</div>
-            <h2 style={{ fontSize: 24, marginBottom: 8 }}>Order Placed!</h2>
-            <div style={{ fontSize: 32, fontWeight: 700, color: '#667eea', marginBottom: 16 }}>
-              Order #{orderSuccess.orderNo}
-            </div>
-            <p style={{ color: '#666', fontSize: 15 }}>
-              Your order will be prepared shortly.
-            </p>
-            <div style={{ marginTop: 20, padding: 16, background: '#f5f7fa', borderRadius: 8 }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: '#52c41a' }}>
-                ₹{orderSuccess.totalAmount.toFixed(2)}
-              </div>
-              <div style={{ color: '#999', fontSize: 13, marginTop: 4 }}>
-                {moment(orderSuccess.orderDate).format('DD MMM YYYY, hh:mm A')}
-              </div>
-            </div>
           </div>
         )}
       </Modal>
