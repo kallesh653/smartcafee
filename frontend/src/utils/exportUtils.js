@@ -304,133 +304,267 @@ export const exportPurchaseReportToPDF = (purchases, dateRange, summary) => {
 };
 
 /**
- * Print thermal bill
+ * Print thermal bill with settings from database
  * @param {Object} bill - Bill data
+ * @param {Object} settings - Business settings (optional, will fetch if not provided)
  */
-export const printThermalBill = (bill) => {
-  const printWindow = window.open('', '_blank', 'width=300,height=600');
+export const printThermalBill = async (bill, settings = null) => {
+  try {
+    // Fetch settings if not provided
+    if (!settings) {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/settings`);
+      const data = await response.json();
+      settings = data.settings;
+    }
 
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Bill #${bill.billNo}</title>
-      <style>
-        @media print {
-          @page {
-            size: 80mm auto;
-            margin: 0;
+    const shopName = settings?.shopName || 'Smart Cafe';
+    const shopTagline = settings?.shopTagline || '';
+    const shopMobile = settings?.shopMobile || '';
+    const shopAddress = settings?.shopAddress || '';
+    const logo = settings?.logo || '';
+    const enableLogo = settings?.thermalPrinterSettings?.enableLogo || false;
+    const footerText = settings?.thermalPrinterSettings?.footerText || 'Thank You! Visit Again';
+    const paperWidth = settings?.thermalPrinterSettings?.paperWidth || 80;
+
+    // Calculate dimensions based on paper width
+    let bodyWidth, fontSize, headerSize;
+    if (paperWidth >= 76) {
+      bodyWidth = `${paperWidth - 8}mm`;
+      fontSize = '12px';
+      headerSize = '16px';
+    } else {
+      bodyWidth = '50mm';
+      fontSize = '11px';
+      headerSize = '14px';
+    }
+
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Bill #${bill.billNo}</title>
+        <meta charset="UTF-8">
+        <style>
+          @media print {
+            @page {
+              size: ${paperWidth}mm auto;
+              margin: 0;
+            }
           }
-        }
-        body {
-          font-family: 'Courier New', monospace;
-          font-size: 12px;
-          margin: 0;
-          padding: 5mm;
-          width: 70mm;
-        }
-        .center { text-align: center; }
-        .bold { font-weight: bold; }
-        .line { border-top: 1px dashed #000; margin: 5px 0; }
-        .item-row { display: flex; justify-content: space-between; margin: 2px 0; }
-        .total-row { display: flex; justify-content: space-between; margin: 5px 0; font-weight: bold; }
-        h2 { margin: 5px 0; font-size: 16px; }
-        h3 { margin: 3px 0; font-size: 14px; }
-        p { margin: 2px 0; }
-      </style>
-    </head>
-    <body>
-      <div class="center">
-        <h2>JUICY</h2>
-        <p>Your Tagline Here</p>
-        <p>Contact: 1234567890</p>
-      </div>
-      <div class="line"></div>
-
-      <p><span class="bold">Bill No:</span> ${bill.billNo}</p>
-      <p><span class="bold">Date:</span> ${moment(bill.billDate).format('DD/MM/YYYY HH:mm')}</p>
-      ${bill.customerName ? `<p><span class="bold">Customer:</span> ${bill.customerName}</p>` : ''}
-      ${bill.customerMobile ? `<p><span class="bold">Mobile:</span> ${bill.customerMobile}</p>` : ''}
-      <p><span class="bold">Cashier:</span> ${bill.userName}</p>
-
-      <div class="line"></div>
-
-      <div class="item-row bold">
-        <span>Item</span>
-        <span>Qty</span>
-        <span>Rate</span>
-        <span>Amount</span>
-      </div>
-      <div class="line"></div>
-
-      ${bill.items?.map(item => `
-        <div class="item-row">
-          <span>${item.itemName}</span>
-          <span>${item.quantity}</span>
-          <span>₹${item.price?.toFixed(2)}</span>
-          <span>₹${item.total?.toFixed(2)}</span>
+          * {
+            box-sizing: border-box;
+          }
+          body {
+            font-family: 'Courier New', monospace;
+            font-size: ${fontSize};
+            margin: 0;
+            padding: 5mm;
+            width: ${bodyWidth};
+            line-height: 1.4;
+          }
+          .center { text-align: center; }
+          .bold { font-weight: bold; }
+          .line {
+            border-top: 1px dashed #000;
+            margin: 5px 0;
+          }
+          .double-line {
+            border-top: 2px solid #000;
+            margin: 5px 0;
+          }
+          .item-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+            font-size: ${paperWidth >= 76 ? '11px' : '10px'};
+          }
+          .item-name {
+            flex: 2;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            padding-right: 5px;
+          }
+          .item-qty {
+            flex: 0.5;
+            text-align: center;
+          }
+          .item-price {
+            flex: 0.8;
+            text-align: right;
+            padding-right: 5px;
+          }
+          .item-total {
+            flex: 0.8;
+            text-align: right;
+          }
+          .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 2px 0;
+            font-size: ${paperWidth >= 76 ? '11px' : '10px'};
+          }
+          .total-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 4px 0;
+            font-weight: bold;
+          }
+          .grand-total {
+            font-size: ${paperWidth >= 76 ? '14px' : '13px'};
+            font-weight: bold;
+            border-top: 2px solid #000;
+            border-bottom: 2px solid #000;
+            padding: 5px 0;
+            margin: 5px 0;
+          }
+          h2 {
+            margin: 5px 0;
+            font-size: ${headerSize};
+            text-transform: uppercase;
+          }
+          p {
+            margin: 2px 0;
+          }
+          .small {
+            font-size: ${paperWidth >= 76 ? '10px' : '9px'};
+          }
+          .logo {
+            max-width: ${paperWidth >= 76 ? '60px' : '50px'};
+            max-height: ${paperWidth >= 76 ? '60px' : '50px'};
+            margin-bottom: 5px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="center">
+          ${enableLogo && logo ? `<img src="${import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'}${logo}" alt="Logo" class="logo" />` : ''}
+          <h2>${shopName.toUpperCase()}</h2>
+          ${shopTagline ? `<p class="small">${shopTagline}</p>` : ''}
+          ${shopAddress ? `<p class="small">${shopAddress}</p>` : ''}
+          ${shopMobile ? `<p class="small">Ph: ${shopMobile}</p>` : ''}
         </div>
-      `).join('')}
+        <div class="double-line"></div>
 
-      <div class="line"></div>
+        <div class="info-row">
+          <span class="bold">Bill No:</span>
+          <span>${bill.billNo}</span>
+        </div>
+        <div class="info-row">
+          <span class="bold">Date:</span>
+          <span>${moment(bill.billDate).format('DD/MM/YYYY HH:mm')}</span>
+        </div>
+        ${bill.seatNumber ? `
+          <div class="info-row">
+            <span class="bold">Seat No:</span>
+            <span>${bill.seatNumber}</span>
+          </div>
+        ` : ''}
+        ${bill.customerName ? `
+          <div class="info-row">
+            <span class="bold">Customer:</span>
+            <span>${bill.customerName}</span>
+          </div>
+        ` : ''}
+        ${bill.customerMobile ? `
+          <div class="info-row">
+            <span class="bold">Phone:</span>
+            <span>${bill.customerMobile}</span>
+          </div>
+        ` : ''}
+        <div class="info-row">
+          <span class="bold">Cashier:</span>
+          <span>${bill.userName}</span>
+        </div>
 
-      <div class="total-row">
-        <span>Subtotal:</span>
-        <span>₹${bill.subtotal?.toFixed(2)}</span>
-      </div>
+        <div class="double-line"></div>
 
-      ${bill.discountAmount > 0 ? `
+        <div class="item-row bold">
+          <span class="item-name">Item</span>
+          <span class="item-qty">Qty</span>
+          <span class="item-price">Rate</span>
+          <span class="item-total">Amt</span>
+        </div>
+        <div class="line"></div>
+
+        ${bill.items?.map(item => `
+          <div class="item-row">
+            <span class="item-name" title="${item.itemName}">${item.itemName}</span>
+            <span class="item-qty">${item.quantity}</span>
+            <span class="item-price">₹${item.price?.toFixed(2)}</span>
+            <span class="item-total">₹${item.itemTotal?.toFixed(2)}</span>
+          </div>
+        `).join('')}
+
+        <div class="line"></div>
+
         <div class="total-row">
-          <span>Discount (${bill.discountPercent}%):</span>
-          <span>- ₹${bill.discountAmount?.toFixed(2)}</span>
+          <span>Subtotal:</span>
+          <span>₹${bill.subtotal?.toFixed(2)}</span>
         </div>
-      ` : ''}
 
-      ${bill.gstAmount > 0 ? `
-        <div class="total-row">
-          <span>GST:</span>
-          <span>₹${bill.gstAmount?.toFixed(2)}</span>
+        ${bill.discountAmount > 0 ? `
+          <div class="total-row" style="font-size: ${paperWidth >= 76 ? '11px' : '10px'};">
+            <span>Discount (${bill.discountPercent}%):</span>
+            <span>- ₹${bill.discountAmount?.toFixed(2)}</span>
+          </div>
+        ` : ''}
+
+        ${bill.gstAmount > 0 ? `
+          <div class="total-row" style="font-size: ${paperWidth >= 76 ? '11px' : '10px'};">
+            <span>GST (${bill.gstPercent || 5}%):</span>
+            <span>₹${bill.gstAmount?.toFixed(2)}</span>
+          </div>
+        ` : ''}
+
+        <div class="total-row grand-total">
+          <span>GRAND TOTAL:</span>
+          <span>₹${bill.grandTotal?.toFixed(2)}</span>
         </div>
-      ` : ''}
 
-      ${bill.roundOff !== 0 ? `
-        <div class="total-row">
-          <span>Round Off:</span>
-          <span>${bill.roundOff > 0 ? '+' : ''}₹${bill.roundOff?.toFixed(2)}</span>
+        <div class="info-row bold">
+          <span>Payment:</span>
+          <span>${bill.paymentMode}</span>
         </div>
-      ` : ''}
 
-      <div class="line"></div>
+        ${bill.paymentMode === 'Mixed' && bill.paymentDetails ? `
+          <div style="font-size: ${paperWidth >= 76 ? '10px' : '9px'}; margin: 3px 0;">
+            ${bill.paymentDetails.cash ? `<div class="info-row"><span>Cash:</span><span>₹${bill.paymentDetails.cash.toFixed(2)}</span></div>` : ''}
+            ${bill.paymentDetails.upi ? `<div class="info-row"><span>UPI:</span><span>₹${bill.paymentDetails.upi.toFixed(2)}</span></div>` : ''}
+            ${bill.paymentDetails.card ? `<div class="info-row"><span>Card:</span><span>₹${bill.paymentDetails.card.toFixed(2)}</span></div>` : ''}
+          </div>
+        ` : ''}
 
-      <div class="total-row" style="font-size: 14px;">
-        <span>GRAND TOTAL:</span>
-        <span>₹${bill.grandTotal?.toFixed(2)}</span>
-      </div>
+        <div class="double-line"></div>
 
-      <div class="line"></div>
+        <div class="center" style="margin-top: 8px;">
+          <p class="bold">${footerText}</p>
+          <p class="small" style="margin-top: 5px;">Powered by Smart Cafe POS</p>
+        </div>
 
-      <div class="total-row">
-        <span>Payment Mode:</span>
-        <span>${bill.paymentMode}</span>
-      </div>
+        <script>
+          window.onload = function() {
+            // Auto print after a short delay
+            setTimeout(() => {
+              window.print();
+              // Close window after printing
+              setTimeout(() => window.close(), 800);
+            }, 300);
+          };
+        </script>
+      </body>
+      </html>
+    `;
 
-      <div class="line"></div>
-
-      <div class="center" style="margin-top: 10px;">
-        <p>Thank You! Visit Again</p>
-        <p style="font-size: 10px;">Generated by Juicy Billing System</p>
-      </div>
-
-      <script>
-        window.onload = function() {
-          window.print();
-          setTimeout(() => window.close(), 1000);
-        };
-      </script>
-    </body>
-    </html>
-  `;
-
-  printWindow.document.write(html);
-  printWindow.document.close();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    return true;
+  } catch (error) {
+    console.error('Thermal print error:', error);
+    // Show error to user if print fails
+    alert('Failed to open print window. Please try again.');
+    return false;
+  }
 };

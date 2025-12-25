@@ -147,6 +147,7 @@ exports.getAllBills = async (req, res) => {
       userId,
       paymentMode,
       status,
+      search,
       page = 1,
       limit = 50
     } = req.query;
@@ -158,6 +159,21 @@ exports.getAllBills = async (req, res) => {
       filter.billDate = {};
       if (startDate) filter.billDate.$gte = new Date(startDate);
       if (endDate) filter.billDate.$lte = new Date(endDate);
+    }
+
+    // Search filter for billNo, customerName, customerMobile
+    if (search) {
+      const searchFilters = [
+        { customerName: { $regex: search, $options: 'i' } },
+        { customerMobile: { $regex: search, $options: 'i' } }
+      ];
+
+      // If search is a number, also search by billNo
+      if (!isNaN(search)) {
+        searchFilters.push({ billNo: parseInt(search) });
+      }
+
+      filter.$or = searchFilters;
     }
 
     // User filter (if not admin, only show their bills)

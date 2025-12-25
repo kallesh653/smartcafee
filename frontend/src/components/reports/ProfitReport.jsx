@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Card, Table, DatePicker, Button, Space, Row, Col, Statistic, message, Divider } from 'antd';
-import { DollarCircleOutlined, CalendarOutlined, RiseOutlined, FallOutlined } from '@ant-design/icons';
+import { Card, Table, DatePicker, Button, Space, Row, Col, Statistic, message, Divider, Input } from 'antd';
+import { DollarCircleOutlined, CalendarOutlined, RiseOutlined, FallOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import Layout from '../common/Layout';
 import api from '../../services/api';
 import moment from 'moment';
@@ -9,9 +9,11 @@ const { RangePicker } = DatePicker;
 
 const ProfitReport = () => {
   const [data, setData] = useState([]);
+  const [allData, setAllData] = useState([]);
   const [summary, setSummary] = useState({});
   const [loading, setLoading] = useState(false);
   const [dateRange, setDateRange] = useState([moment().subtract(30, 'days'), moment()]);
+  const [searchText, setSearchText] = useState('');
 
   useEffect(() => {
     fetchReport();
@@ -27,13 +29,37 @@ const ProfitReport = () => {
       }
 
       const { data: response } = await api.get('/reports/profit', { params });
-      setData(response.report || []);
+      const reportData = response.report || [];
+      setAllData(reportData);
+      applySearch(reportData, searchText);
       setSummary(response.summary || {});
     } catch (error) {
       message.error('Failed to load profit report');
     } finally {
       setLoading(false);
     }
+  };
+
+  const applySearch = (reportData, search) => {
+    if (!search) {
+      setData(reportData);
+      return;
+    }
+
+    const filtered = reportData.filter(item =>
+      item.itemName?.toLowerCase().includes(search.toLowerCase())
+    );
+    setData(filtered);
+  };
+
+  const handleSearch = () => {
+    applySearch(allData, searchText);
+  };
+
+  const handleReset = () => {
+    setSearchText('');
+    setDateRange([moment().subtract(30, 'days'), moment()]);
+    setTimeout(fetchReport, 100);
   };
 
   const columns = [
@@ -154,8 +180,8 @@ const ProfitReport = () => {
 
         <Card style={{ marginBottom: 16 }}>
           <Space size="large" wrap>
-            <Space direction="vertical" size={0}>
-              <span style={{ fontSize: 12, color: '#999' }}>Date Range</span>
+            <Space direction="vertical" size={2}>
+              <span style={{ fontSize: 12, color: '#999', fontWeight: 500 }}>Date Range</span>
               <RangePicker
                 value={dateRange}
                 onChange={(dates) => setDateRange(dates)}
@@ -164,23 +190,36 @@ const ProfitReport = () => {
                 style={{ width: 300 }}
               />
             </Space>
+            <Space direction="vertical" size={2}>
+              <span style={{ fontSize: 12, color: '#999', fontWeight: 500 }}>Search Item</span>
+              <Input
+                placeholder="Search by product name..."
+                prefix={<SearchOutlined />}
+                size="large"
+                style={{ width: 250 }}
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                onPressEnter={handleSearch}
+                allowClear
+              />
+            </Space>
             <Button
               type="primary"
-              icon={<CalendarOutlined />}
+              icon={<SearchOutlined />}
               size="large"
               onClick={fetchReport}
               loading={loading}
+              style={{ marginTop: 18 }}
             >
               Apply Filter
             </Button>
             <Button
+              icon={<ReloadOutlined />}
               size="large"
-              onClick={() => {
-                setDateRange([moment().subtract(30, 'days'), moment()]);
-                setTimeout(fetchReport, 100);
-              }}
+              onClick={handleReset}
+              style={{ marginTop: 18 }}
             >
-              Last 30 Days
+              Reset
             </Button>
           </Space>
         </Card>

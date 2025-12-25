@@ -5,7 +5,7 @@ require('dotenv').config();
 const menuProducts = [
   // POPCORN CATEGORY
   {
-    serialNo: 101,
+    serialNo: 1,
     name: 'POP CORN SALTED',
     description: 'Classic salted popcorn',
     price: 99,
@@ -20,7 +20,7 @@ const menuProducts = [
     tags: ['popcorn', 'snacks', 'salted']
   },
   {
-    serialNo: 102,
+    serialNo: 2,
     name: 'POP CORN BUTTER CHEESE',
     description: 'Buttery cheese flavored popcorn',
     price: 99,
@@ -35,7 +35,7 @@ const menuProducts = [
     tags: ['popcorn', 'snacks', 'cheese', 'butter']
   },
   {
-    serialNo: 103,
+    serialNo: 3,
     name: 'POP CORN BARBEQUE',
     description: 'Smoky BBQ flavored popcorn',
     price: 99,
@@ -50,7 +50,7 @@ const menuProducts = [
     tags: ['popcorn', 'snacks', 'barbeque']
   },
   {
-    serialNo: 104,
+    serialNo: 4,
     name: 'POP CORN TANGY TOMATO',
     description: 'Tangy tomato flavored popcorn',
     price: 99,
@@ -64,7 +64,7 @@ const menuProducts = [
     tags: ['popcorn', 'snacks', 'tomato', 'tangy']
   },
   {
-    serialNo: 105,
+    serialNo: 5,
     name: 'POP CORN MEXICAN',
     description: 'Spicy Mexican flavored popcorn',
     price: 99,
@@ -78,7 +78,7 @@ const menuProducts = [
     tags: ['popcorn', 'snacks', 'mexican', 'spicy']
   },
   {
-    serialNo: 106,
+    serialNo: 6,
     name: 'POPCORN LARGE - ANY',
     description: 'Large size popcorn - any flavor',
     price: 149,
@@ -95,7 +95,7 @@ const menuProducts = [
 
   // SNACKS CATEGORY
   {
-    serialNo: 107,
+    serialNo: 7,
     name: 'ALOO TIKKI',
     description: 'Crispy potato patties - 5 pieces',
     price: 99,
@@ -110,7 +110,7 @@ const menuProducts = [
     tags: ['snacks', 'fried', 'potato', 'tikki']
   },
   {
-    serialNo: 108,
+    serialNo: 8,
     name: 'CHEESE CORN TRINGLES/NUGGET',
     description: 'Cheesy corn triangles - 4 pieces',
     price: 99,
@@ -124,7 +124,7 @@ const menuProducts = [
     tags: ['snacks', 'cheese', 'corn', 'nugget']
   },
   {
-    serialNo: 109,
+    serialNo: 9,
     name: 'FRENCH FRIES/FINGER CHIPS',
     description: 'Crispy golden french fries',
     price: 99,
@@ -139,7 +139,7 @@ const menuProducts = [
     tags: ['snacks', 'fries', 'potato', 'chips']
   },
   {
-    serialNo: 110,
+    serialNo: 10,
     name: 'PUNJABI SAMOSA',
     description: 'Traditional Punjabi samosa - 6 pieces',
     price: 99,
@@ -154,7 +154,7 @@ const menuProducts = [
     tags: ['snacks', 'samosa', 'punjabi', 'fried']
   },
   {
-    serialNo: 111,
+    serialNo: 11,
     name: 'VEG SAMOSA',
     description: 'Vegetable samosa - 2 pieces',
     price: 59,
@@ -168,7 +168,7 @@ const menuProducts = [
     tags: ['snacks', 'samosa', 'veg', 'fried']
   },
   {
-    serialNo: 112,
+    serialNo: 12,
     name: 'VEG SPRING ROLL',
     description: 'Crispy vegetable spring rolls - 4 pieces',
     price: 129,
@@ -182,7 +182,7 @@ const menuProducts = [
     tags: ['snacks', 'spring roll', 'veg', 'chinese']
   },
   {
-    serialNo: 113,
+    serialNo: 13,
     name: 'PIZZA POCKETS',
     description: 'Mini pizza pockets - 3 pieces',
     price: 99,
@@ -196,7 +196,7 @@ const menuProducts = [
     tags: ['snacks', 'pizza', 'italian']
   },
   {
-    serialNo: 114,
+    serialNo: 14,
     name: 'LEBENEESE FALAFAL KEBAB',
     description: 'Lebanese style falafel kebab - 5 pieces',
     price: 79,
@@ -210,7 +210,7 @@ const menuProducts = [
     tags: ['snacks', 'falafel', 'kebab', 'lebanese']
   },
   {
-    serialNo: 115,
+    serialNo: 15,
     name: 'HARA BARA KEBAB',
     description: 'Green vegetable kebab - 5 pieces',
     price: 99,
@@ -224,7 +224,7 @@ const menuProducts = [
     tags: ['snacks', 'kebab', 'veg', 'green']
   },
   {
-    serialNo: 116,
+    serialNo: 16,
     name: 'CHEESE SHOTS',
     description: 'Cheesy bites - 10 pieces',
     price: 89,
@@ -238,7 +238,7 @@ const menuProducts = [
     tags: ['snacks', 'cheese', 'shots']
   },
   {
-    serialNo: 117,
+    serialNo: 17,
     name: 'CHILLI GARLIC BYTES/SHOTS',
     description: 'Spicy chilli garlic bites - 5 pieces',
     price: 99,
@@ -252,7 +252,7 @@ const menuProducts = [
     tags: ['snacks', 'chilli', 'garlic', 'spicy']
   },
   {
-    serialNo: 118,
+    serialNo: 18,
     name: 'CHEESE POPPERS',
     description: 'Cheesy poppers',
     price: 49,
@@ -268,7 +268,7 @@ const menuProducts = [
 
   // BEVERAGES CATEGORY
   {
-    serialNo: 119,
+    serialNo: 19,
     name: 'COKE',
     description: 'Coca-Cola 300ml',
     price: 49,
@@ -283,7 +283,7 @@ const menuProducts = [
     tags: ['beverages', 'cold drink', 'coke', 'coca cola']
   },
   {
-    serialNo: 120,
+    serialNo: 20,
     name: 'FANTA',
     description: 'Fanta Orange 300ml',
     price: 49,
@@ -297,7 +297,7 @@ const menuProducts = [
     tags: ['beverages', 'cold drink', 'fanta', 'orange']
   },
   {
-    serialNo: 121,
+    serialNo: 21,
     name: 'SPRITE',
     description: 'Sprite Lemon 300ml',
     price: 49,
@@ -315,11 +315,11 @@ const menuProducts = [
 async function seedProducts() {
   try {
     console.log('Connecting to MongoDB...');
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/smartcafe_cinema');
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/smartcafe');
     console.log('✓ Connected to MongoDB');
 
-    console.log('\nDeleting existing menu products (serialNo 101-121)...');
-    await Product.deleteMany({ serialNo: { $gte: 101, $lte: 121 } });
+    console.log('\nDeleting existing menu products (serialNo 1-21)...');
+    await Product.deleteMany({ serialNo: { $gte: 1, $lte: 21 } });
     console.log('✓ Existing products deleted');
 
     console.log('\nSeeding menu products...');

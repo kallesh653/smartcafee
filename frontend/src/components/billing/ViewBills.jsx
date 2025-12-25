@@ -58,11 +58,15 @@ const ViewBills = () => {
     }
   };
 
-  const handlePrintBill = () => {
+  const handlePrintBill = async () => {
     if (selectedBill) {
       try {
-        printThermalBill(selectedBill);
-        message.success('Print window opened successfully');
+        const success = await printThermalBill(selectedBill);
+        if (success) {
+          message.success('Print window opened successfully');
+        } else {
+          message.error('Failed to open print window');
+        }
       } catch (error) {
         console.error('Print error:', error);
         message.error('Failed to open print window');

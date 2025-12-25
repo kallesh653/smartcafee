@@ -335,28 +335,29 @@ exports.showWiseCollectionReport = async (req, res) => {
       const totalBills = inSlot.length;
       const totalSales = inSlot.reduce((sum, b) => sum + (b.grandTotal || 0), 0);
 
-      const cash = inSlot.reduce((sum, b) => {
+      let cash = 0;
+      let upi = 0;
+      let card = 0;
+      let mixed = 0;
+
+      inSlot.forEach(b => {
         const pd = b.paymentDetails || {};
-        if (b.paymentMode === 'Cash') return sum + (b.grandTotal || 0);
-        if (b.paymentMode === 'Mixed') return sum + (pd.cash || 0);
-        return sum;
-      }, 0);
-      const upi = inSlot.reduce((sum, b) => {
-        const pd = b.paymentDetails || {};
-        if (b.paymentMode === 'UPI') return sum + (b.grandTotal || 0);
-        if (b.paymentMode === 'Mixed') return sum + (pd.upi || 0);
-        return sum;
-      }, 0);
-      const card = inSlot.reduce((sum, b) => {
-        const pd = b.paymentDetails || {};
-        if (b.paymentMode === 'Card') return sum + (b.grandTotal || 0);
-        if (b.paymentMode === 'Mixed') return sum + (pd.card || 0);
-        return sum;
-      }, 0);
-      const mixed = inSlot.reduce((sum, b) => {
-        if (b.paymentMode === 'Mixed') return sum + (b.grandTotal || 0);
-        return sum;
-      }, 0);
+
+        if (b.paymentMode === 'Cash') {
+          cash += (b.grandTotal || 0);
+        } else if (b.paymentMode === 'UPI') {
+          upi += (b.grandTotal || 0);
+        } else if (b.paymentMode === 'Card') {
+          card += (b.grandTotal || 0);
+        } else if (b.paymentMode === 'Mixed') {
+          // For mixed payments, split into individual payment types
+          // Don't add to mixed total (to avoid double counting)
+          cash += (pd.cash || 0);
+          upi += (pd.upi || 0);
+          card += (pd.card || 0);
+          mixed += (b.grandTotal || 0);
+        }
+      });
 
       return {
         slotName: slot.name,

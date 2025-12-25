@@ -40,7 +40,7 @@ const ProductManagement = () => {
     setImagePreview(product?.imageUrl
       ? (product.imageUrl.startsWith('http')
           ? product.imageUrl
-          : `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${product.imageUrl}`)
+          : `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'}${product.imageUrl}`)
       : null);
 
     if (product) {
@@ -138,7 +138,7 @@ const ProductManagement = () => {
         <Image
           src={imageUrl.startsWith('http')
             ? imageUrl
-            : `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${imageUrl}`}
+            : `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'}${imageUrl}`}
           alt="Product"
           width={50}
           height={50}

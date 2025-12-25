@@ -1,17 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  Button, InputNumber, Modal, Badge, Space, Spin, Empty, Row, Col, Card, Statistic, Tag, Input, App as AntdApp
+  Button, InputNumber, Modal, Badge, Space, Spin, Empty, Row, Col, Card, Statistic, Tag, Input, App as AntdApp, Form
 } from 'antd';
 import {
   ShoppingCartOutlined, CheckOutlined, ClearOutlined, MinusOutlined, PlusOutlined,
-  ThunderboltOutlined, DeleteOutlined, SearchOutlined, CloseCircleOutlined, WarningOutlined
+  ThunderboltOutlined, DeleteOutlined, SearchOutlined, CloseCircleOutlined, WarningOutlined, PrinterOutlined,
+  HomeOutlined, MobileOutlined
 } from '@ant-design/icons';
 import Layout from '../common/Layout';
 import api from '../../services/api';
 import moment from 'moment';
+import { printThermalBill } from '../../utils/exportUtils';
 
 const FastOrderCashier = () => {
   const { message, notification } = AntdApp.useApp();
+  const [form] = Form.useForm();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState(['All']);
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -26,6 +29,7 @@ const FastOrderCashier = () => {
   const alertedLowStockRef = useRef(new Set());
   const [orders, setOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   useEffect(() => {
     fetchProducts();
@@ -188,17 +192,27 @@ const FastOrderCashier = () => {
   };
 
   // STEP 2: Place Order (ONE TAP)
-  const placeOrder = async () => {
+  const handlePlaceOrderClick = () => {
     const cartItems = Object.values(cart);
-
     if (cartItems.length === 0) {
       message.error('Cart is empty');
       return;
     }
+    setShowConfirmModal(true);
+  };
 
-    setProcessing(true);
-
+  const placeOrder = async () => {
     try {
+      const values = await form.validateFields();
+      const cartItems = Object.values(cart);
+
+      if (cartItems.length === 0) {
+        message.error('Cart is empty');
+        return;
+      }
+
+      setProcessing(true);
+
       // Create bill directly
       const subtotal = cartItems.reduce((sum, item) => sum + item.itemTotal, 0);
       const grandTotal = Math.round(subtotal);
@@ -219,8 +233,9 @@ const FastOrderCashier = () => {
       }
 
       const billData = {
-        customerName: 'Walk-in Customer',
-        customerMobile: '',
+        customerName: values.seatNumber ? `Seat ${values.seatNumber}` : 'Walk-in Customer',
+        customerMobile: values.mobile || '',
+        seatNumber: values.seatNumber || '',
         items: cartItems.map(item => ({
           mainCode: null,
           mainCodeName: 'General',
@@ -263,12 +278,18 @@ const FastOrderCashier = () => {
 
       setBillPreview(data.bill);
       setCart({});
+      setShowConfirmModal(false);
+      form.resetFields();
 
       // Haptic feedback
       if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
 
     } catch (error) {
-      message.error(error.response?.data?.message || 'Failed to create bill');
+      if (error.errorFields) {
+        message.error('Please fill in required fields');
+      } else {
+        message.error(error.response?.data?.message || 'Failed to create bill');
+      }
     } finally {
       setProcessing(false);
     }
@@ -435,7 +456,7 @@ const FastOrderCashier = () => {
                   <img
                     src={product.imageUrl.startsWith('http')
                       ? product.imageUrl
-                      : `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${product.imageUrl}`}
+                      : `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'}${product.imageUrl}`}
                     alt={product.name}
                     className="product-card-image"
                     onError={(e) => e.target.style.display = 'none'}
@@ -539,7 +560,13 @@ const FastOrderCashier = () => {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Tag color="blue">Bill: —</Tag>
+                  {o.seatNumber ? (
+                    <Tag color="blue" icon={<HomeOutlined />}>Seat: {o.seatNumber}</Tag>
+                  ) : o.customerMobile ? (
+                    <Tag color="green" icon={<MobileOutlined />}>{o.customerMobile}</Tag>
+                  ) : (
+                    <Tag color="default">Walk-in</Tag>
+                  )}
                   <Tag color="geekblue">Order #{o.orderNo}</Tag>
                   <span style={{ marginLeft: 'auto', fontWeight: 700 }}>₹{Math.round(o.totalAmount)}</span>
                 </div>
@@ -632,7 +659,7 @@ const FastOrderCashier = () => {
               size="middle"
               block
               icon={<ThunderboltOutlined />}
-              onClick={placeOrder}
+              onClick={handlePlaceOrderClick}
               loading={processing}
               disabled={cartCount === 0}
               style={{
@@ -649,15 +676,169 @@ const FastOrderCashier = () => {
         </Row>
       </div>
 
+      {/* Confirm Order Modal with Seat/Mobile */}
+      <Modal
+        title="Confirm Order Details"
+        open={showConfirmModal}
+        onCancel={() => setShowConfirmModal(false)}
+        footer={null}
+        width={400}
+      >
+        <div style={{ padding: '10px 0' }}>
+          <div style={{ marginBottom: 16, padding: 12, background: '#f5f7fa', borderRadius: 8 }}>
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Order Summary</div>
+            {Object.values(cart).map((item, idx) => (
+              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                <span>{item.name} × {item.quantity}</span>
+                <span>₹{item.itemTotal}</span>
+              </div>
+            ))}
+            <div style={{
+              marginTop: 8,
+              paddingTop: 8,
+              borderTop: '1px solid #d9d9d9',
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: 18,
+              fontWeight: 700,
+              color: '#52c41a'
+            }}>
+              <span>Total:</span>
+              <span>₹{cartTotal}</span>
+            </div>
+          </div>
+
+          <Form form={form} layout="vertical">
+            <Form.Item
+              name="seatNumber"
+              label="Seat Number (Optional)"
+              rules={[
+                {
+                  validator: (_, value) => {
+                    const mobile = form.getFieldValue('mobile');
+                    if (!value && !mobile) {
+                      return Promise.reject('Either Seat Number or Mobile is required');
+                    }
+                    return Promise.resolve();
+                  }
+                }
+              ]}
+            >
+              <Input
+                prefix={<HomeOutlined />}
+                placeholder="e.g., A12"
+                size="large"
+              />
+            </Form.Item>
+
+            <Form.Item
+              name="mobile"
+              label="Mobile Number (Optional)"
+              rules={[
+                {
+                  validator: (_, value) => {
+                    const seatNumber = form.getFieldValue('seatNumber');
+                    if (!value && !seatNumber) {
+                      return Promise.reject('Either Mobile or Seat Number is required');
+                    }
+                    if (value && value.length !== 10) {
+                      return Promise.reject('Mobile must be 10 digits');
+                    }
+                    return Promise.resolve();
+                  }
+                }
+              ]}
+            >
+              <Input
+                prefix={<MobileOutlined />}
+                placeholder="10-digit mobile"
+                maxLength={10}
+                size="large"
+              />
+            </Form.Item>
+          </Form>
+
+          <div style={{ fontSize: 13, color: '#666', marginBottom: 16, padding: '8px 12px', background: '#fff7e6', borderRadius: 6 }}>
+            ℹ️ Enter either seat number or mobile number
+          </div>
+
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <Button
+              type="primary"
+              size="large"
+              block
+              icon={<CheckOutlined />}
+              onClick={placeOrder}
+              loading={processing}
+              style={{
+                background: 'linear-gradient(135deg, #389e0d 0%, #52c41a 100%)',
+                border: 'none',
+                fontWeight: 600
+              }}
+            >
+              Confirm & Place Order
+            </Button>
+            <Button
+              size="large"
+              block
+              onClick={() => setShowConfirmModal(false)}
+              style={{
+                borderColor: '#1890ff',
+                color: '#1890ff',
+                fontWeight: 600
+              }}
+            >
+              Edit Order (Add/Remove Items)
+            </Button>
+            <Button
+              size="large"
+              block
+              onClick={() => {
+                setShowConfirmModal(false);
+                form.resetFields();
+              }}
+            >
+              Cancel
+            </Button>
+          </Space>
+        </div>
+      </Modal>
+
       {/* Bill Preview Modal */}
       <Modal
         title={<div style={{ textAlign: 'center', fontSize: 20, fontWeight: 700 }}>✅ Order Placed!</div>}
         open={!!billPreview}
         onCancel={() => setBillPreview(null)}
         footer={[
-          <Button key="close" size="large" onClick={() => setBillPreview(null)} block>
-            Close
-          </Button>
+          <Space key="actions" style={{ width: '100%' }} direction="vertical" size="middle">
+            <Button
+              type="primary"
+              size="large"
+              icon={<PrinterOutlined />}
+              onClick={async () => {
+                try {
+                  await printThermalBill(billPreview);
+                  message.success('Print window opened');
+                  // Auto-close after 1.5 seconds
+                  setTimeout(() => {
+                    setBillPreview(null);
+                  }, 1500);
+                } catch (error) {
+                  message.error('Failed to print');
+                }
+              }}
+              block
+              style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                border: 'none'
+              }}
+            >
+              Print Bill
+            </Button>
+            <Button key="close" size="large" onClick={() => setBillPreview(null)} block>
+              Close
+            </Button>
+          </Space>
         ]}
         width={400}
       >

@@ -12,7 +12,11 @@ import {
   Divider,
   Space,
   Tabs,
-  Alert
+  Alert,
+  Upload,
+  Select,
+  Image,
+  Modal
 } from 'antd';
 import {
   ShopOutlined,
@@ -23,15 +27,24 @@ import {
   PrinterOutlined,
   SettingOutlined,
   SaveOutlined,
-  NumberOutlined
+  NumberOutlined,
+  UploadOutlined,
+  EyeOutlined,
+  PictureOutlined,
+  VideoCameraOutlined
 } from '@ant-design/icons';
 import Layout from '../common/Layout';
 import api from '../../services/api';
+import moment from 'moment';
 
 const BusinessSettings = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
+  const [logoUrl, setLogoUrl] = useState('');
+  const [paperWidth, setPaperWidth] = useState(80);
+  const [showPreview, setShowPreview] = useState(false);
+  const [menuSlideFiles, setMenuSlideFiles] = useState([]);
 
   useEffect(() => {
     fetchSettings();
@@ -41,11 +54,57 @@ const BusinessSettings = () => {
     setLoading(true);
     try {
       const { data } = await api.get('/settings');
-      form.setFieldsValue(data.settings);
+      // Ensure menuSlides array exists with proper structure
+      const settings = {
+        ...data.settings,
+        menuSlides: data.settings?.menuSlides?.length > 0
+          ? data.settings.menuSlides
+          : [
+              { type: 'image', title: '', subtitle: '', description: '', imageUrl: '', videoUrl: '', bgColor: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', icon: '' },
+              { type: 'image', title: '', subtitle: '', description: '', imageUrl: '', videoUrl: '', bgColor: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', icon: '' },
+              { type: 'image', title: '', subtitle: '', description: '', imageUrl: '', videoUrl: '', bgColor: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', icon: '' }
+            ]
+      };
+      form.setFieldsValue(settings);
+      setLogoUrl(data.settings?.logo || '');
+      setPaperWidth(data.settings?.thermalPrinterSettings?.paperWidth || 80);
     } catch (error) {
       message.error(error.response?.data?.message || 'Failed to load settings');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLogoUpload = async (info) => {
+    if (info.file.status === 'uploading') {
+      return;
+    }
+    if (info.file.status === 'done') {
+      const url = info.file.response.imageUrl;
+      setLogoUrl(url);
+      form.setFieldsValue({ logo: url });
+      message.success('Logo uploaded successfully');
+    } else if (info.file.status === 'error') {
+      message.error('Logo upload failed');
+    }
+  };
+
+  const handleMenuSlideUpload = async (info, index) => {
+    if (info.file.status === 'done') {
+      const url = info.file.response.imageUrl;
+      // Get current menuSlides array
+      const currentSlides = form.getFieldValue('menuSlides') || [];
+      // Update the specific slide's imageUrl
+      if (currentSlides[index]) {
+        currentSlides[index] = {
+          ...currentSlides[index],
+          imageUrl: url
+        };
+        form.setFieldsValue({ menuSlides: currentSlides });
+        message.success('Slide image uploaded successfully! Click Save Settings to apply.');
+      }
+    } else if (info.file.status === 'error') {
+      message.error('Failed to upload slide image');
     }
   };
 
@@ -275,27 +334,52 @@ const BusinessSettings = () => {
           <Col xs={24} md={12}>
             <Form.Item
               name={['thermalPrinterSettings', 'paperWidth']}
-              label="Paper Width (mm)"
+              label="Paper Width"
             >
-              <InputNumber
-                min={40}
-                max={80}
-                style={{ width: '100%' }}
+              <Select
                 size="large"
-                placeholder="48"
+                onChange={(value) => setPaperWidth(value)}
+                options={[
+                  { value: 80, label: '80mm (Standard Thermal Paper)' },
+                  { value: 79, label: '79mm (Medium Thermal Paper)' },
+                  { value: 76.2, label: '76.2mm (3 inch Thermal Paper)' },
+                  { value: 58, label: '58mm (Small Thermal Paper)' }
+                ]}
               />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
             <Form.Item
-              name={['thermalPrinterSettings', 'enableLogo']}
-              label="Enable Logo"
-              valuePropName="checked"
+              label="Upload Logo"
+              tooltip="Upload your shop logo for thermal bills"
             >
-              <Switch
-                checkedChildren="Enabled"
-                unCheckedChildren="Disabled"
-              />
+              <Upload
+                name="image"
+                action={`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/products/upload`}
+                headers={{
+                  Authorization: `Bearer ${localStorage.getItem('token')}`
+                }}
+                listType="picture-card"
+                showUploadList={false}
+                onChange={handleLogoUpload}
+              >
+                {logoUrl ? (
+                  <Image
+                    src={`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'}${logoUrl}`}
+                    alt="logo"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    preview={false}
+                  />
+                ) : (
+                  <div>
+                    <UploadOutlined style={{ fontSize: 24 }} />
+                    <div style={{ marginTop: 8 }}>Upload Logo</div>
+                  </div>
+                )}
+              </Upload>
+            </Form.Item>
+            <Form.Item name="logo" hidden>
+              <Input />
             </Form.Item>
           </Col>
           <Col xs={24}>
@@ -309,6 +393,17 @@ const BusinessSettings = () => {
                 size="large"
               />
             </Form.Item>
+          </Col>
+          <Col xs={24}>
+            <Button
+              type="dashed"
+              icon={<EyeOutlined />}
+              onClick={() => setShowPreview(true)}
+              block
+              size="large"
+            >
+              Preview Thermal Bill ({paperWidth}mm)
+            </Button>
           </Col>
         </Row>
       ),
@@ -372,6 +467,31 @@ const BusinessSettings = () => {
               />
             </Form.Item>
           </Col>
+          <Col xs={24}>
+            <Divider />
+          </Col>
+          <Col xs={24}>
+            <Alert
+              message="Customer Order Management"
+              description="Control who can convert customer orders to bills"
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+          </Col>
+          <Col xs={24} md={12}>
+            <Form.Item
+              name={['defaultPermissions', 'customerCanConvertOrderToBill']}
+              label="Allow Customer Order to Bill Conversion"
+              valuePropName="checked"
+              tooltip="If enabled, staff can generate bills from customer orders placed via menu"
+            >
+              <Switch
+                checkedChildren="Enabled"
+                unCheckedChildren="Disabled"
+              />
+            </Form.Item>
+          </Col>
         </Row>
       ),
     },
@@ -427,11 +547,41 @@ const BusinessSettings = () => {
           </Col>
           <Col xs={24}>
             <Form.Item
-              name={['menuSlides', 0, 'imageUrl']}
-              label="Image URL (Optional)"
-              tooltip="Full URL to an image (https://...)"
+              label="Upload Slide Image"
+              tooltip="Upload image for slide 1. After upload, click Save Settings to apply changes."
             >
-              <Input placeholder="https://example.com/image.jpg" size="large" />
+              <Upload
+                name="image"
+                action={`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/products/upload`}
+                headers={{
+                  Authorization: `Bearer ${localStorage.getItem('token')}`
+                }}
+                listType="picture"
+                maxCount={1}
+                onChange={(info) => handleMenuSlideUpload(info, 0)}
+                showUploadList={true}
+              >
+                <Button icon={<UploadOutlined />} size="large" block>
+                  Upload Image for Slide 1
+                </Button>
+              </Upload>
+              {form.getFieldValue(['menuSlides', 0, 'imageUrl']) && (
+                <div style={{ marginTop: 12, padding: 12, background: '#f5f7fa', borderRadius: 8 }}>
+                  <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>Current Slide 1 Image:</div>
+                  <img
+                    src={`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'}${form.getFieldValue(['menuSlides', 0, 'imageUrl'])}`}
+                    alt="Slide 1 Preview"
+                    style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px' }}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.parentElement.innerHTML += '<div style="color: red; font-size: 12px;">Image not found or failed to load</div>';
+                    }}
+                  />
+                </div>
+              )}
+            </Form.Item>
+            <Form.Item name={['menuSlides', 0, 'imageUrl']} hidden>
+              <Input />
             </Form.Item>
           </Col>
           <Col xs={24}>
@@ -455,10 +605,41 @@ const BusinessSettings = () => {
           </Col>
           <Col xs={24}>
             <Form.Item
-              name={['menuSlides', 1, 'imageUrl']}
-              label="Image URL (Optional)"
+              label="Upload Slide Image"
+              tooltip="Upload image for slide 2. After upload, click Save Settings to apply changes."
             >
-              <Input placeholder="https://example.com/image2.jpg" size="large" />
+              <Upload
+                name="image"
+                action={`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/products/upload`}
+                headers={{
+                  Authorization: `Bearer ${localStorage.getItem('token')}`
+                }}
+                listType="picture"
+                maxCount={1}
+                onChange={(info) => handleMenuSlideUpload(info, 1)}
+                showUploadList={true}
+              >
+                <Button icon={<UploadOutlined />} size="large" block>
+                  Upload Image for Slide 2
+                </Button>
+              </Upload>
+              {form.getFieldValue(['menuSlides', 1, 'imageUrl']) && (
+                <div style={{ marginTop: 12, padding: 12, background: '#f5f7fa', borderRadius: 8 }}>
+                  <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>Current Slide 2 Image:</div>
+                  <img
+                    src={`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'}${form.getFieldValue(['menuSlides', 1, 'imageUrl'])}`}
+                    alt="Slide 2 Preview"
+                    style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px' }}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.parentElement.innerHTML += '<div style="color: red; font-size: 12px;">Image not found or failed to load</div>';
+                    }}
+                  />
+                </div>
+              )}
+            </Form.Item>
+            <Form.Item name={['menuSlides', 1, 'imageUrl']} hidden>
+              <Input />
             </Form.Item>
           </Col>
           <Col xs={24}>
@@ -482,10 +663,41 @@ const BusinessSettings = () => {
           </Col>
           <Col xs={24}>
             <Form.Item
-              name={['menuSlides', 2, 'imageUrl']}
-              label="Image URL (Optional)"
+              label="Upload Slide Image"
+              tooltip="Upload image for slide 3. After upload, click Save Settings to apply changes."
             >
-              <Input placeholder="https://example.com/image3.jpg" size="large" />
+              <Upload
+                name="image"
+                action={`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/products/upload`}
+                headers={{
+                  Authorization: `Bearer ${localStorage.getItem('token')}`
+                }}
+                listType="picture"
+                maxCount={1}
+                onChange={(info) => handleMenuSlideUpload(info, 2)}
+                showUploadList={true}
+              >
+                <Button icon={<UploadOutlined />} size="large" block>
+                  Upload Image for Slide 3
+                </Button>
+              </Upload>
+              {form.getFieldValue(['menuSlides', 2, 'imageUrl']) && (
+                <div style={{ marginTop: 12, padding: 12, background: '#f5f7fa', borderRadius: 8 }}>
+                  <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>Current Slide 3 Image:</div>
+                  <img
+                    src={`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'}${form.getFieldValue(['menuSlides', 2, 'imageUrl'])}`}
+                    alt="Slide 3 Preview"
+                    style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px' }}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.parentElement.innerHTML += '<div style="color: red; font-size: 12px;">Image not found or failed to load</div>';
+                    }}
+                  />
+                </div>
+              )}
+            </Form.Item>
+            <Form.Item name={['menuSlides', 2, 'imageUrl']} hidden>
+              <Input />
             </Form.Item>
           </Col>
         </Row>
@@ -557,6 +769,161 @@ const BusinessSettings = () => {
           </Row>
         </Form>
       </Card>
+
+      {/* Thermal Bill Preview Modal */}
+      <Modal
+        title={`Thermal Bill Preview - ${paperWidth}mm Paper`}
+        open={showPreview}
+        onCancel={() => setShowPreview(false)}
+        footer={[
+          <Button key="close" type="primary" onClick={() => setShowPreview(false)}>
+            Close Preview
+          </Button>
+        ]}
+        width={paperWidth === 80 ? 450 : 350}
+        centered
+      >
+        <div style={{
+          width: paperWidth === 80 ? '72mm' : '50mm',
+          margin: '0 auto',
+          padding: '10px',
+          fontFamily: 'monospace',
+          fontSize: paperWidth === 80 ? '12px' : '11px',
+          border: '2px dashed #ccc',
+          backgroundColor: '#fff'
+        }}>
+          {/* Header */}
+          <div style={{ textAlign: 'center', marginBottom: '10px' }}>
+            {logoUrl && (
+              <div style={{ marginBottom: '8px' }}>
+                <img
+                  src={`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'}${logoUrl}`}
+                  alt="logo"
+                  style={{ maxWidth: '50px', maxHeight: '50px' }}
+                />
+              </div>
+            )}
+            <div style={{
+              fontSize: paperWidth === 80 ? '16px' : '14px',
+              fontWeight: 'bold',
+              textTransform: 'uppercase'
+            }}>
+              {form.getFieldValue('shopName') || 'SMART CAFE'}
+            </div>
+            {form.getFieldValue('shopTagline') && (
+              <div style={{ fontSize: paperWidth === 80 ? '11px' : '10px', marginTop: '2px' }}>
+                {form.getFieldValue('shopTagline')}
+              </div>
+            )}
+            {form.getFieldValue('shopAddress') && (
+              <div style={{ fontSize: paperWidth === 80 ? '10px' : '9px', marginTop: '4px' }}>
+                {form.getFieldValue('shopAddress')}
+              </div>
+            )}
+            {form.getFieldValue('shopMobile') && (
+              <div style={{ fontSize: paperWidth === 80 ? '10px' : '9px' }}>
+                Tel: {form.getFieldValue('shopMobile')}
+              </div>
+            )}
+          </div>
+
+          <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }}></div>
+
+          {/* Bill Details */}
+          <div style={{ fontSize: paperWidth === 80 ? '10px' : '9px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Bill No: {form.getFieldValue('billPrefix') || 'BILL'}-001</span>
+              <span>{moment().format('DD/MM/YY')}</span>
+            </div>
+            <div>Time: {moment().format('hh:mm A')}</div>
+            <div>Cashier: Admin</div>
+          </div>
+
+          <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }}></div>
+
+          {/* Items Header */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            fontSize: paperWidth === 80 ? '10px' : '9px',
+            fontWeight: 'bold'
+          }}>
+            <span style={{ flex: 2 }}>ITEM</span>
+            <span style={{ flex: 1, textAlign: 'center' }}>QTY</span>
+            <span style={{ flex: 1, textAlign: 'right' }}>RATE</span>
+            <span style={{ flex: 1, textAlign: 'right' }}>AMT</span>
+          </div>
+
+          <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div>
+
+          {/* Sample Items */}
+          <div style={{ fontSize: paperWidth === 80 ? '10px' : '9px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+              <span style={{ flex: 2 }}>Coffee</span>
+              <span style={{ flex: 1, textAlign: 'center' }}>2</span>
+              <span style={{ flex: 1, textAlign: 'right' }}>50</span>
+              <span style={{ flex: 1, textAlign: 'right' }}>100</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+              <span style={{ flex: 2 }}>Sandwich</span>
+              <span style={{ flex: 1, textAlign: 'center' }}>1</span>
+              <span style={{ flex: 1, textAlign: 'right' }}>80</span>
+              <span style={{ flex: 1, textAlign: 'right' }}>80</span>
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }}></div>
+
+          {/* Totals */}
+          <div style={{ fontSize: paperWidth === 80 ? '10px' : '9px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Subtotal:</span>
+              <span>₹180.00</span>
+            </div>
+            {form.getFieldValue('gstEnabled') && (
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>GST ({form.getFieldValue('defaultGstPercent') || 5}%):</span>
+                <span>₹{(180 * (form.getFieldValue('defaultGstPercent') || 5) / 100).toFixed(2)}</span>
+              </div>
+            )}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: paperWidth === 80 ? '12px' : '11px',
+              fontWeight: 'bold',
+              marginTop: '4px'
+            }}>
+              <span>GRAND TOTAL:</span>
+              <span>₹{form.getFieldValue('gstEnabled')
+                ? (180 * (1 + (form.getFieldValue('defaultGstPercent') || 5) / 100)).toFixed(2)
+                : '180.00'}</span>
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }}></div>
+
+          {/* Payment */}
+          <div style={{ fontSize: paperWidth === 80 ? '10px' : '9px' }}>
+            <div>Payment Mode: Cash</div>
+          </div>
+
+          <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }}></div>
+
+          {/* Footer */}
+          <div style={{
+            textAlign: 'center',
+            fontSize: paperWidth === 80 ? '11px' : '10px',
+            marginTop: '8px'
+          }}>
+            <div style={{ fontWeight: 'bold' }}>
+              {form.getFieldValue(['thermalPrinterSettings', 'footerText']) || 'Thank You! Visit Again'}
+            </div>
+            <div style={{ fontSize: paperWidth === 80 ? '9px' : '8px', marginTop: '4px' }}>
+              Powered by Smart Cafe POS
+            </div>
+          </div>
+        </div>
+      </Modal>
     </Layout>
   );
 };

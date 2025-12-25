@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import {
   Card,
@@ -146,8 +147,8 @@ const StockView = () => {
   const stockColumns = [
     {
       title: 'Item Code',
-      dataIndex: 'subCode',
-      key: 'subCode',
+      dataIndex: 'serialNo',
+      key: 'serialNo',
       width: 120,
       render: (code) => (
         <Tag color="purple" style={{ fontSize: 13, fontWeight: 600 }}>
@@ -157,14 +158,14 @@ const StockView = () => {
     },
     {
       title: 'Item Name',
-      dataIndex: 'subName',
-      key: 'subName',
+      dataIndex: 'name',
+      key: 'name',
       width: 250,
       render: (name, record) => (
         <div>
           <div style={{ fontWeight: 600, fontSize: 14 }}>{name}</div>
           <div style={{ fontSize: 12, color: '#8c8c8c' }}>
-            {record.mainCodeName}
+            {record.category}
           </div>
         </div>
       )
@@ -201,10 +202,10 @@ const StockView = () => {
       render: (_, record) => (
         <div>
           <div style={{ fontSize: 12 }}>
-            <span style={{ color: '#ff4d4f' }}>Min: {record.minStockLevel}</span>
+            <span style={{ color: '#ff4d4f' }}>Min: {record.minStockAlert || 0}</span>
           </div>
           <div style={{ fontSize: 12 }}>
-            <span style={{ color: '#52c41a' }}>Max: {record.maxStockLevel}</span>
+            <span style={{ color: '#52c41a' }}>Max: {record.maxStockLevel || 999}</span>
           </div>
         </div>
       )
@@ -221,10 +222,12 @@ const StockView = () => {
         { text: 'Overstock', value: 'over' }
       ],
       onFilter: (value, record) => {
+        const minAlert = record.minStockAlert || 0;
+        const maxLevel = record.maxStockLevel || 999999;
         if (value === 'out') return record.currentStock === 0;
-        if (value === 'low') return record.currentStock > 0 && record.currentStock <= record.minStockLevel;
-        if (value === 'over') return record.currentStock > record.maxStockLevel;
-        return record.currentStock > record.minStockLevel && record.currentStock <= record.maxStockLevel;
+        if (value === 'low') return record.currentStock > 0 && record.currentStock <= minAlert;
+        if (value === 'over') return record.currentStock > maxLevel;
+        return record.currentStock > minAlert && record.currentStock <= maxLevel;
       },
       render: (_, record) => {
         const status = getStockStatus(record);
@@ -236,9 +239,9 @@ const StockView = () => {
       }
     },
     {
-      title: 'Purchase Price',
-      dataIndex: 'purchasePrice',
-      key: 'purchasePrice',
+      title: 'Cost Price',
+      dataIndex: 'costPrice',
+      key: 'costPrice',
       width: 120,
       align: 'right',
       render: (price) => (
@@ -247,8 +250,8 @@ const StockView = () => {
     },
     {
       title: 'Sale Price',
-      dataIndex: 'salePrice',
-      key: 'salePrice',
+      dataIndex: 'price',
+      key: 'price',
       width: 120,
       align: 'right',
       render: (price) => (
@@ -262,9 +265,9 @@ const StockView = () => {
       key: 'stockValue',
       width: 130,
       align: 'right',
-      sorter: (a, b) => (a.currentStock * a.purchasePrice) - (b.currentStock * b.purchasePrice),
+      sorter: (a, b) => (a.currentStock * a.costPrice) - (b.currentStock * b.costPrice),
       render: (_, record) => {
-        const value = record.currentStock * (record.purchasePrice || 0);
+        const value = record.currentStock * (record.costPrice || 0);
         return (
           <span style={{ fontWeight: 700, fontSize: 14, color: '#1890ff' }}>
             ₹{value.toFixed(2)}
@@ -540,7 +543,7 @@ const StockView = () => {
         title={
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <StockOutlined style={{ fontSize: 24, color: '#667eea' }} />
-            <span>Adjust Stock - {selectedItem?.subName}</span>
+            <span>Adjust Stock - {selectedItem?.name}</span>
           </div>
         }
         open={adjustModal}
@@ -567,7 +570,7 @@ const StockView = () => {
             <Col span={12}>
               <div style={{ fontSize: 12, color: '#8c8c8c' }}>Min Level</div>
               <div style={{ fontSize: 20, fontWeight: 700, color: '#ff4d4f' }}>
-                {selectedItem?.minStockLevel} {selectedItem?.unit}
+                {selectedItem?.minStockAlert || 0} {selectedItem?.unit}
               </div>
             </Col>
           </Row>

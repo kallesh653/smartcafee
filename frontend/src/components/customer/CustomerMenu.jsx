@@ -1,16 +1,20 @@
 import { useState, useEffect } from 'react';
 import {
-  Button, message, Modal, Badge, Space, Spin, Empty, Row, Col, Card, Carousel, Tag, Divider
+  Button, message, Modal, Badge, Space, Spin, Empty, Row, Col, Card, Carousel, Tag, Divider, List, Form, Input, Radio
 } from 'antd';
 import {
   ShoppingCartOutlined, CheckOutlined, MinusOutlined, PlusOutlined,
-  CloseCircleOutlined, FireOutlined, StarOutlined, ThunderboltOutlined
+  CloseCircleOutlined, FireOutlined, StarOutlined, ThunderboltOutlined,
+  UnorderedListOutlined, ClockCircleOutlined, MobileOutlined, HomeOutlined,
+  WalletOutlined, QrcodeOutlined, CreditCardOutlined
 } from '@ant-design/icons';
 import api from '../../services/api';
 import moment from 'moment';
 import './CustomerMenu.css';
+import InstallPrompt from '../common/InstallPrompt';
 
 const CustomerMenu = () => {
+  const [form] = Form.useForm();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -21,6 +25,9 @@ const CustomerMenu = () => {
   const [orderSuccess, setOrderSuccess] = useState(null);
   const [sliderData, setSliderData] = useState([]);
   const [settings, setSettings] = useState(null);
+  const [showMyOrders, setShowMyOrders] = useState(false);
+  const [myOrders, setMyOrders] = useState([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
 
   useEffect(() => {
     fetchProducts();
@@ -54,7 +61,25 @@ const CustomerMenu = () => {
       const { data } = await api.get('/settings');
       setSettings(data.settings);
       if (data.settings?.menuSlides && data.settings.menuSlides.length > 0) {
-        setSliderData(data.settings.menuSlides);
+        // Filter out slides with no content (no title, subtitle, and no image)
+        const validSlides = data.settings.menuSlides.filter(slide =>
+          slide.title || slide.subtitle || slide.imageUrl
+        );
+
+        if (validSlides.length > 0) {
+          setSliderData(validSlides);
+          console.log('Loaded menu slides:', validSlides);
+        } else {
+          // Default slides if no valid slides
+          setSliderData([
+            {
+              type: 'image',
+              title: 'Welcome to Smart Cafe',
+              subtitle: 'Order from your seat!',
+              bgColor: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+            }
+          ]);
+        }
       } else {
         // Default slides if none configured
         setSliderData([
@@ -67,7 +92,7 @@ const CustomerMenu = () => {
         ]);
       }
     } catch (error) {
-      console.error('Failed to load settings');
+      console.error('Failed to load settings:', error);
       setSliderData([
         {
           type: 'image',
@@ -114,15 +139,17 @@ const CustomerMenu = () => {
   };
 
   const placeOrder = async () => {
-    const cartItems = Object.values(cart);
-
-    setProcessing(true);
-
     try {
+      const values = await form.validateFields();
+      const cartItems = Object.values(cart);
+
+      setProcessing(true);
+
       const orderData = {
         customerName: 'Guest',
-        customerMobile: '',
-        seatNumber: '',
+        customerMobile: values.mobile || '',
+        seatNumber: values.seatNumber || '',
+        paymentMode: values.paymentMode || 'Cash',
         items: cartItems.map(item => ({
           product: item._id,
           quantity: item.quantity
@@ -135,12 +162,35 @@ const CustomerMenu = () => {
       setOrderSuccess(data.order);
       setCart({});
       setShowCheckout(false);
+      form.resetFields();
 
     } catch (error) {
-      message.error(error.response?.data?.message || 'Failed to place order');
+      if (error.errorFields) {
+        message.error('Please fill in required fields');
+      } else {
+        message.error(error.response?.data?.message || 'Failed to place order');
+      }
     } finally {
       setProcessing(false);
     }
+  };
+
+  const fetchMyOrders = async () => {
+    try {
+      setLoadingOrders(true);
+      // Fetch today's customer orders (last 20)
+      const { data } = await api.get('/orders?orderType=Customer&limit=20');
+      setMyOrders(data.orders || []);
+    } catch (error) {
+      message.error('Failed to load orders');
+    } finally {
+      setLoadingOrders(false);
+    }
+  };
+
+  const handleShowMyOrders = () => {
+    setShowMyOrders(true);
+    fetchMyOrders();
   };
 
   const cartItems = Object.values(cart);
@@ -152,57 +202,90 @@ const CustomerMenu = () => {
       {/* Beautiful Top Slider */}
       <div className="menu-slider-wrapper">
         <Carousel autoplay autoplaySpeed={4000} effect="fade" dots={{ className: 'slider-dots' }}>
-          {sliderData.map((slide, index) => (
-            <div key={index}>
-              <div
-                className="slider-slide"
-                style={{
-                  background: slide.bgColor || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  backgroundImage: slide.imageUrl ? `url(${slide.imageUrl})` : 'none',
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center'
-                }}
-              >
-                {/* Overlay for better text visibility */}
-                <div className="slider-overlay" />
+          {sliderData.map((slide, index) => {
+            const imageUrl = slide.imageUrl
+              ? (slide.imageUrl.startsWith('http')
+                  ? slide.imageUrl
+                  : `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'}${slide.imageUrl}`)
+              : null;
 
-                {/* Video Background if provided */}
-                {slide.type === 'video' && slide.videoUrl && (
-                  <video
-                    className="slider-video"
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    src={slide.videoUrl}
-                  />
-                )}
+            return (
+              <div key={index}>
+                <div
+                  className="slider-slide"
+                  style={{
+                    background: imageUrl
+                      ? `url(${imageUrl})`
+                      : (slide.bgColor || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'),
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    backgroundRepeat: 'no-repeat',
+                    minHeight: '400px',
+                    position: 'relative'
+                  }}
+                >
+                  {/* Overlay for better text visibility - only if there's text */}
+                  {(slide.title || slide.subtitle || slide.description) && (
+                    <div className="slider-overlay" />
+                  )}
 
-                {/* Content */}
-                <div className="slider-content">
-                  {slide.title && (
-                    <h1 className="slider-title">
-                      {slide.icon && <span>{slide.icon} </span>}
-                      {slide.title}
-                    </h1>
+                  {/* Video Background if provided */}
+                  {slide.type === 'video' && slide.videoUrl && (
+                    <video
+                      className="slider-video"
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      src={slide.videoUrl}
+                    />
                   )}
-                  {slide.subtitle && (
-                    <p className="slider-subtitle">{slide.subtitle}</p>
-                  )}
-                  {slide.description && (
-                    <p className="slider-description">{slide.description}</p>
+
+                  {/* Content */}
+                  {(slide.title || slide.subtitle || slide.description) && (
+                    <div className="slider-content">
+                      {slide.title && (
+                        <h1 className="slider-title">
+                          {slide.icon && <span>{slide.icon} </span>}
+                          {slide.title}
+                        </h1>
+                      )}
+                      {slide.subtitle && (
+                        <p className="slider-subtitle">{slide.subtitle}</p>
+                      )}
+                      {slide.description && (
+                        <p className="slider-description">{slide.description}</p>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </Carousel>
       </div>
 
       {/* Shop Name */}
       <div className="shop-header">
-        <h2>☕ {settings?.shopName || 'Smart Cafe'}</h2>
-        <p>{settings?.shopTagline || 'Delicious treats just a tap away'}</p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h2>☕ {settings?.shopName || 'Smart Cafe'}</h2>
+            <p>{settings?.shopTagline || 'Delicious treats just a tap away'}</p>
+          </div>
+          <Button
+            type="default"
+            size="large"
+            icon={<UnorderedListOutlined />}
+            onClick={handleShowMyOrders}
+            style={{
+              borderRadius: '20px',
+              fontWeight: 600,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+            }}
+          >
+            My Orders
+          </Button>
+        </div>
       </div>
 
       <div style={{ padding: '0 16px' }}>
@@ -254,7 +337,7 @@ const CustomerMenu = () => {
                             alt={product.name}
                             src={product.imageUrl.startsWith('http')
                               ? product.imageUrl
-                              : `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}${product.imageUrl}`}
+                              : `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'}${product.imageUrl}`}
                             className="product-image"
                             onError={(e) => {
                               e.target.style.display = 'none';
@@ -382,7 +465,7 @@ const CustomerMenu = () => {
         open={showCheckout}
         onCancel={() => setShowCheckout(false)}
         footer={null}
-        width={450}
+        width={500}
         className="checkout-modal"
       >
         <div className="checkout-content">
@@ -422,6 +505,94 @@ const CustomerMenu = () => {
             </div>
           </div>
 
+          <Divider />
+
+          {/* Order Details Form */}
+          <Form
+            form={form}
+            layout="vertical"
+            initialValues={{ paymentMode: 'Cash' }}
+          >
+            <Row gutter={12}>
+              <Col xs={24} sm={12}>
+                <Form.Item
+                  name="seatNumber"
+                  label="Seat Number"
+                  rules={[
+                    {
+                      validator: (_, value) => {
+                        const mobile = form.getFieldValue('mobile');
+                        if (!value && !mobile) {
+                          return Promise.reject('Either Seat Number or Mobile is required');
+                        }
+                        return Promise.resolve();
+                      }
+                    }
+                  ]}
+                >
+                  <Input
+                    prefix={<HomeOutlined />}
+                    placeholder="e.g., A12"
+                    size="large"
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12}>
+                <Form.Item
+                  name="mobile"
+                  label="Mobile Number"
+                  rules={[
+                    {
+                      validator: (_, value) => {
+                        const seatNumber = form.getFieldValue('seatNumber');
+                        if (!value && !seatNumber) {
+                          return Promise.reject('Either Mobile or Seat Number is required');
+                        }
+                        if (value && value.length !== 10) {
+                          return Promise.reject('Mobile must be 10 digits');
+                        }
+                        return Promise.resolve();
+                      }
+                    }
+                  ]}
+                >
+                  <Input
+                    prefix={<MobileOutlined />}
+                    placeholder="10-digit mobile"
+                    maxLength={10}
+                    size="large"
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Form.Item
+              name="paymentMode"
+              label="Payment Method"
+              rules={[{ required: true, message: 'Please select payment method' }]}
+            >
+              <Radio.Group size="large" style={{ width: '100%' }}>
+                <Row gutter={[8, 8]}>
+                  <Col xs={8}>
+                    <Radio.Button value="Cash" style={{ width: '100%', textAlign: 'center' }}>
+                      <WalletOutlined /> Cash
+                    </Radio.Button>
+                  </Col>
+                  <Col xs={8}>
+                    <Radio.Button value="UPI" style={{ width: '100%', textAlign: 'center' }}>
+                      <QrcodeOutlined /> QR/UPI
+                    </Radio.Button>
+                  </Col>
+                  <Col xs={8}>
+                    <Radio.Button value="Card" style={{ width: '100%', textAlign: 'center' }}>
+                      <CreditCardOutlined /> Card
+                    </Radio.Button>
+                  </Col>
+                </Row>
+              </Radio.Group>
+            </Form.Item>
+          </Form>
+
           <Button
             type="primary"
             size="large"
@@ -436,12 +607,12 @@ const CustomerMenu = () => {
         </div>
       </Modal>
 
-      {/* Success Modal - Celebration */}
+      {/* Success Modal - Celebration with Full Order Details */}
       <Modal
         open={!!orderSuccess}
         onCancel={() => setOrderSuccess(null)}
         footer={null}
-        width={400}
+        width={500}
         className="success-modal"
         centered
       >
@@ -461,28 +632,280 @@ const CustomerMenu = () => {
             <p className="success-message">
               Your order will be prepared shortly. Thank you!
             </p>
-            <div className="order-details-box">
-              <div className="order-detail-row">
-                <span>Total Amount</span>
-                <span className="amount">₹{orderSuccess.totalAmount.toFixed(2)}</span>
+
+            {/* Order Details */}
+            <div className="order-details-box" style={{ marginTop: 20 }}>
+              <div style={{
+                background: '#f5f7fa',
+                padding: '12px',
+                borderRadius: '8px',
+                marginBottom: '12px'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  marginBottom: '8px',
+                  fontSize: '13px',
+                  color: '#666'
+                }}>
+                  <span>Order Number:</span>
+                  <span style={{ fontWeight: 600, color: '#333' }}>#{orderSuccess.orderNo}</span>
+                </div>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: '13px',
+                  color: '#666'
+                }}>
+                  <span>Order Time:</span>
+                  <span style={{ fontWeight: 600, color: '#333' }}>
+                    {moment(orderSuccess.orderDate).format('DD MMM YYYY, hh:mm A')}
+                  </span>
+                </div>
               </div>
-              <div className="order-detail-row">
-                <span>Order Time</span>
-                <span>{moment(orderSuccess.orderDate).format('hh:mm A')}</span>
+
+              {/* Ordered Items */}
+              <div style={{ marginBottom: '12px' }}>
+                <h3 style={{
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  marginBottom: '12px',
+                  color: '#333'
+                }}>
+                  Ordered Items
+                </h3>
+                <div style={{
+                  border: '1px solid #e8e8e8',
+                  borderRadius: '8px',
+                  overflow: 'hidden'
+                }}>
+                  {orderSuccess.items && orderSuccess.items.map((item, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '12px 16px',
+                        borderBottom: index < orderSuccess.items.length - 1 ? '1px solid #f0f0f0' : 'none',
+                        background: '#fff'
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <div style={{
+                          fontSize: '14px',
+                          fontWeight: 500,
+                          color: '#333',
+                          marginBottom: '4px'
+                        }}>
+                          {item.productName}
+                        </div>
+                        <div style={{
+                          fontSize: '13px',
+                          color: '#999'
+                        }}>
+                          {item.quantity} × ₹{item.price?.toFixed(2)}
+                        </div>
+                      </div>
+                      <div style={{
+                        fontSize: '15px',
+                        fontWeight: 600,
+                        color: '#52c41a'
+                      }}>
+                        ₹{item.itemTotal?.toFixed(2)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Total Amount */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '16px',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                borderRadius: '8px',
+                color: '#fff'
+              }}>
+                <span style={{ fontSize: '16px', fontWeight: 600 }}>Total Amount</span>
+                <span style={{ fontSize: '22px', fontWeight: 700 }}>
+                  ₹{orderSuccess.totalAmount?.toFixed(2)}
+                </span>
               </div>
             </div>
+
             <Button
               type="primary"
               size="large"
               block
               onClick={() => setOrderSuccess(null)}
               className="done-btn"
+              style={{ marginTop: 20 }}
             >
               Done
             </Button>
           </div>
         )}
       </Modal>
+
+      {/* My Orders Modal */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <UnorderedListOutlined style={{ fontSize: '20px', color: '#667eea' }} />
+            <span style={{ fontSize: '18px', fontWeight: 600 }}>My Orders</span>
+          </div>
+        }
+        open={showMyOrders}
+        onCancel={() => setShowMyOrders(false)}
+        footer={[
+          <Button key="close" type="primary" onClick={() => setShowMyOrders(false)}>
+            Close
+          </Button>
+        ]}
+        width={600}
+        className="my-orders-modal"
+      >
+        {loadingOrders ? (
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            <Spin size="large" tip="Loading your orders..." />
+          </div>
+        ) : myOrders.length === 0 ? (
+          <Empty
+            description="No orders found"
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            style={{ margin: '40px 0' }}
+          />
+        ) : (
+          <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+            <List
+              dataSource={myOrders}
+              renderItem={(order) => (
+                <Card
+                  key={order._id}
+                  style={{
+                    marginBottom: '16px',
+                    borderRadius: '12px',
+                    border: '1px solid #e8e8e8',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+                  }}
+                  bodyStyle={{ padding: '16px' }}
+                >
+                  {/* Order Header */}
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '12px',
+                    paddingBottom: '12px',
+                    borderBottom: '1px solid #f0f0f0'
+                  }}>
+                    <div>
+                      <Tag icon={<StarOutlined />} color="blue" style={{ fontSize: '14px', padding: '4px 12px' }}>
+                        Order #{order.orderNo}
+                      </Tag>
+                      <Tag
+                        color={
+                          order.status === 'Pending' ? 'orange' :
+                          order.status === 'Preparing' ? 'blue' :
+                          order.status === 'Ready' ? 'green' :
+                          order.status === 'Completed' ? 'default' : 'red'
+                        }
+                        style={{ fontSize: '13px', padding: '4px 10px', marginLeft: '8px' }}
+                      >
+                        {order.status}
+                      </Tag>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '12px', color: '#999' }}>
+                        <ClockCircleOutlined /> {moment(order.orderDate).format('DD MMM, hh:mm A')}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Order Info */}
+                  <div style={{
+                    background: '#f5f7fa',
+                    padding: '10px 12px',
+                    borderRadius: '6px',
+                    marginBottom: '12px',
+                    fontSize: '13px'
+                  }}>
+                    {order.seatNumber && (
+                      <div style={{ marginBottom: '4px' }}>
+                        <HomeOutlined /> Seat: <strong>{order.seatNumber}</strong>
+                      </div>
+                    )}
+                    {order.customerMobile && (
+                      <div>
+                        <MobileOutlined /> Mobile: <strong>{order.customerMobile}</strong>
+                      </div>
+                    )}
+                    {order.paymentMode && (
+                      <div style={{ marginTop: '4px' }}>
+                        <WalletOutlined /> Payment: <strong>{order.paymentMode}</strong>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Order Items */}
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: '#666' }}>
+                      Items Ordered:
+                    </div>
+                    {order.items && order.items.map((item, index) => (
+                      <div
+                        key={index}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          padding: '8px 12px',
+                          background: '#fafafa',
+                          borderRadius: '6px',
+                          marginBottom: '6px'
+                        }}
+                      >
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '14px', fontWeight: 500, color: '#333' }}>
+                            {item.productName}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>
+                            {item.quantity} × ₹{item.price?.toFixed(2)}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#52c41a' }}>
+                          ₹{item.itemTotal?.toFixed(2)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Order Total */}
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '12px',
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    borderRadius: '8px',
+                    color: '#fff'
+                  }}>
+                    <span style={{ fontSize: '15px', fontWeight: 600 }}>Total Amount</span>
+                    <span style={{ fontSize: '20px', fontWeight: 700 }}>
+                      ₹{order.totalAmount?.toFixed(2)}
+                    </span>
+                  </div>
+                </Card>
+              )}
+            />
+          </div>
+        )}
+      </Modal>
+
+      {/* PWA Install Prompt */}
+      <InstallPrompt autoShow={true} />
     </div>
   );
 };

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Form, Input, Button, Card, Tabs, Typography, App as AntdApp } from 'antd';
-import { UserOutlined, LockOutlined, ShopOutlined, CrownOutlined, TeamOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { UserOutlined, LockOutlined, ShopOutlined, CrownOutlined, TeamOutlined, ThunderboltOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -13,6 +13,50 @@ const Login = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [form] = Form.useForm();
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+
+  // PWA Install handling
+  useEffect(() => {
+    // Check if already installed
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsInstalled(true);
+    }
+
+    // Listen for beforeinstallprompt event
+    const handleBeforeInstall = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+
+    window.addEventListener('appinstalled', () => {
+      setIsInstalled(true);
+      setDeferredPrompt(null);
+      message.success('Smart Cafe installed successfully!');
+    });
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) {
+      message.info('App is already installed or installation is not available');
+      return;
+    }
+
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+
+    if (outcome === 'accepted') {
+      message.success('Thank you for installing Smart Cafe!');
+    }
+
+    setDeferredPrompt(null);
+  };
 
   const onFinish = async (values) => {
     setLoading(true);
@@ -258,6 +302,46 @@ const Login = () => {
             </Button>
           </Form.Item>
         </Form>
+
+        {/* Install App Button - Only show if not installed and prompt is available */}
+        {!isInstalled && deferredPrompt && (
+          <div style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid #f0f0f0' }}>
+            <Button
+              type="default"
+              size="large"
+              icon={<DownloadOutlined />}
+              onClick={handleInstallClick}
+              block
+              style={{
+                height: 48,
+                fontSize: 15,
+                fontWeight: 600,
+                borderRadius: 8,
+                border: '2px dashed #667eea',
+                color: '#667eea',
+                background: 'rgba(102, 126, 234, 0.05)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(102, 126, 234, 0.1)';
+                e.currentTarget.style.borderColor = '#764ba2';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(102, 126, 234, 0.05)';
+                e.currentTarget.style.borderColor = '#667eea';
+              }}
+            >
+              <DownloadOutlined style={{ fontSize: 18 }} />
+              Add to Home Screen
+            </Button>
+            <Text style={{ display: 'block', textAlign: 'center', marginTop: 12, fontSize: 13, color: '#999' }}>
+              Install for quick access like a native app
+            </Text>
+          </div>
+        )}
       </Card>
     </div>
   );

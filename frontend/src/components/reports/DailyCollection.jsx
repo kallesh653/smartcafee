@@ -10,7 +10,7 @@ const { RangePicker } = DatePicker;
 const DailyCollection = () => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [dateRange, setDateRange] = useState([moment().subtract(15, 'days'), moment()]);
+  const [dateRange, setDateRange] = useState([moment(), moment()]);
 
   useEffect(() => {
     fetchReport();
@@ -188,11 +188,20 @@ const DailyCollection = () => {
             <Button
               size="large"
               onClick={() => {
-                setDateRange([moment().subtract(15, 'days'), moment()]);
+                setDateRange([moment(), moment()]);
                 setTimeout(fetchReport, 100);
               }}
             >
-              Last 15 Days
+              Today
+            </Button>
+            <Button
+              size="large"
+              onClick={() => {
+                setDateRange([moment().subtract(6, 'days'), moment()]);
+                setTimeout(fetchReport, 100);
+              }}
+            >
+              Last 7 Days
             </Button>
             <Button
               size="large"

@@ -17,6 +17,21 @@ router.get('/', getProducts);
 router.get('/categories/list', getCategories);
 router.get('/:id', getProduct);
 
+// Image upload endpoint (for settings, menu slides, etc.)
+router.post('/upload', protect, upload.single('image'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No image uploaded' });
+    }
+    // Return the image URL with correct path
+    const imageUrl = `/uploads/products/${req.file.filename}`;
+    res.json({ success: true, imageUrl, message: 'Image uploaded successfully' });
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ success: false, message: 'Failed to upload image' });
+  }
+});
+
 // Admin only routes
 router.post('/', protect, authorize('admin'), upload.single('image'), createProduct);
 router.put('/:id', protect, authorize('admin'), upload.single('image'), updateProduct);

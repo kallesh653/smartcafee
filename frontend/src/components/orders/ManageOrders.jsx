@@ -4,21 +4,25 @@ import {
 } from 'antd';
 import {
   CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined,
-  DollarOutlined, EyeOutlined, ReloadOutlined
+  DollarOutlined, EyeOutlined, ReloadOutlined, ArrowLeftOutlined
 } from '@ant-design/icons';
 import Layout from '../common/Layout';
 import api from '../../services/api';
 import moment from 'moment';
+import { useAuth } from '../../context/AuthContext';
 
 const ManageOrders = () => {
+  const { user } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [statusFilter, setStatusFilter] = useState('Pending');
+  const [settings, setSettings] = useState(null);
 
   useEffect(() => {
     fetchOrders();
+    fetchSettings();
     // Auto-refresh every 10 seconds
     const interval = setInterval(fetchOrders, 10000);
     return () => clearInterval(interval);
@@ -33,6 +37,15 @@ const ManageOrders = () => {
       console.error('Failed to load orders');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSettings = async () => {
+    try {
+      const { data } = await api.get('/settings');
+      setSettings(data.settings);
+    } catch (error) {
+      console.error('Failed to load settings');
     }
   };
 
@@ -338,6 +351,20 @@ const ManageOrders = () => {
 
             {/* Actions */}
             <Space direction="vertical" style={{ width: '100%' }} size="middle">
+              {/* Back Button */}
+              <Button
+                size="large"
+                block
+                icon={<ArrowLeftOutlined />}
+                onClick={() => setSelectedOrder(null)}
+                style={{
+                  borderColor: '#d9d9d9',
+                  fontWeight: 600
+                }}
+              >
+                Back to Orders
+              </Button>
+
               {selectedOrder.status === 'Pending' && (
                 <>
                   <Button
@@ -378,7 +405,8 @@ const ManageOrders = () => {
                 </Button>
               )}
 
-              {(selectedOrder.status === 'Ready' || selectedOrder.status === 'Preparing') && (
+              {(selectedOrder.status === 'Ready' || selectedOrder.status === 'Preparing') &&
+               (user?.role === 'admin' || settings?.defaultPermissions?.customerCanConvertOrderToBill) && (
                 <Button
                   type="primary"
                   size="large"
@@ -394,6 +422,21 @@ const ManageOrders = () => {
                 >
                   Convert to Bill & Complete
                 </Button>
+              )}
+
+              {(selectedOrder.status === 'Ready' || selectedOrder.status === 'Preparing') &&
+               user?.role !== 'admin' && !settings?.defaultPermissions?.customerCanConvertOrderToBill && (
+                <div style={{
+                  padding: '12px',
+                  background: '#fff7e6',
+                  border: '1px solid #ffd591',
+                  borderRadius: '8px',
+                  textAlign: 'center',
+                  fontSize: '13px',
+                  color: '#ad6800'
+                }}>
+                  ⚠️ Bill conversion requires admin permission
+                </div>
               )}
             </Space>
           </div>
