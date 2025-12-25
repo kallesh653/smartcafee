@@ -156,25 +156,31 @@ const Login = () => {
       >
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div style={{
-            width: 80,
-            height: 80,
+            width: 200,
+            height: 'auto',
             margin: '0 auto 16px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            borderRadius: '50%',
+            padding: '20px',
+            background: '#000',
+            borderRadius: '16px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 8px 20px rgba(102, 126, 234, 0.4)',
+            boxShadow: '0 8px 30px rgba(255, 215, 0, 0.3)',
             animation: 'pulse 2s infinite'
           }}>
-            <ShopOutlined style={{ fontSize: 40, color: 'white' }} />
+            <img
+              src="/logo.png"
+              alt="Smart Cafe"
+              style={{ width: '100%', height: 'auto', filter: 'drop-shadow(0 0 10px rgba(255, 215, 0, 0.5))' }}
+              onError={(e) => {
+                e.target.style.display = 'none';
+                e.target.parentElement.innerHTML = '<div style="color: #ffd700; font-size: 32px; font-weight: 700;">SMART CAFÉ</div>';
+              }}
+            />
           </div>
-          <Title level={2} style={{ margin: '0 0 8px 0', fontSize: 28, fontWeight: 700, color: '#1a1a1a' }}>
-            Smart Cafe
-          </Title>
           <Text style={{ fontSize: 16, color: '#666', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             <ThunderboltOutlined style={{ color: '#667eea' }} />
-            Point of Sale System
+            Cinema Theater Point of Sale System
           </Text>
         </div>
 

@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider, App as AntdApp } from 'antd';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import SplashScreen from './components/common/SplashScreen';
 
 // New Smart Cafe Pages
 import Login from './components/auth/Login';
@@ -281,6 +283,8 @@ function AppRoutes() {
 }
 
 function App() {
+  const [showSplash, setShowSplash] = useState(true);
+
   return (
     <ConfigProvider
       theme={{
@@ -291,6 +295,7 @@ function App() {
       }}
     >
       <AntdApp>
+        {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} />}
         <BrowserRouter>
           <AuthProvider>
             <AppRoutes />
