@@ -104,7 +104,14 @@ const InstallPrompt = ({ autoShow = true }) => {
         {/* App Icon */}
         <div className="install-icon-container">
           <div className="install-icon-wrapper">
-            <img src="/icon.svg" alt="Smart Cafe" className="install-icon" />
+            <img
+              src="/logo.png"
+              alt="Smart Cafe"
+              className="install-icon"
+              onError={(e) => {
+                e.target.src = '/icon.svg';
+              }}
+            />
           </div>
         </div>
 
