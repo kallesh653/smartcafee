@@ -303,8 +303,8 @@ const Login = () => {
           </Form.Item>
         </Form>
 
-        {/* Install App Button - Only show if not installed and prompt is available */}
-        {!isInstalled && deferredPrompt && (
+        {/* Install App Button - Show if not installed */}
+        {!isInstalled && (
           <div style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid #f0f0f0' }}>
             <Button
               type="default"
@@ -312,33 +312,39 @@ const Login = () => {
               icon={<DownloadOutlined />}
               onClick={handleInstallClick}
               block
+              disabled={!deferredPrompt}
               style={{
                 height: 48,
                 fontSize: 15,
                 fontWeight: 600,
                 borderRadius: 8,
-                border: '2px dashed #667eea',
-                color: '#667eea',
-                background: 'rgba(102, 126, 234, 0.05)',
+                border: deferredPrompt ? '2px dashed #667eea' : '2px dashed #d9d9d9',
+                color: deferredPrompt ? '#667eea' : '#bfbfbf',
+                background: deferredPrompt ? 'rgba(102, 126, 234, 0.05)' : 'rgba(0, 0, 0, 0.02)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: 8
+                gap: 8,
+                cursor: deferredPrompt ? 'pointer' : 'not-allowed'
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(102, 126, 234, 0.1)';
-                e.currentTarget.style.borderColor = '#764ba2';
+                if (deferredPrompt) {
+                  e.currentTarget.style.background = 'rgba(102, 126, 234, 0.1)';
+                  e.currentTarget.style.borderColor = '#764ba2';
+                }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(102, 126, 234, 0.05)';
-                e.currentTarget.style.borderColor = '#667eea';
+                if (deferredPrompt) {
+                  e.currentTarget.style.background = 'rgba(102, 126, 234, 0.05)';
+                  e.currentTarget.style.borderColor = '#667eea';
+                }
               }}
             >
               <DownloadOutlined style={{ fontSize: 18 }} />
               Add to Home Screen
             </Button>
             <Text style={{ display: 'block', textAlign: 'center', marginTop: 12, fontSize: 13, color: '#999' }}>
-              Install for quick access like a native app
+              {deferredPrompt ? 'Install for quick access like a native app' : 'Install option will appear when using HTTPS'}
             </Text>
           </div>
         )}
