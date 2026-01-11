@@ -17,7 +17,7 @@ connectDB();
 const app = express();
 
 // Trust proxy - Required when behind Nginx
-app.set('trust proxy', true);
+app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet({
@@ -28,7 +28,8 @@ app.use(cors());
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 2000 // limit each IP to 2000 requests per windowMs
+  max: 2000, // limit each IP to 2000 requests per windowMs
+  validate: { trustProxy: false } // Disable trust proxy validation
 });
 app.use(limiter);
 
